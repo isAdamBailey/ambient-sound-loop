@@ -224,6 +224,147 @@ static void testTimerSurvivesSampleRateChange() {
     CHECK(frames == 66150, "remaining 1.5 s at 44.1 kHz rendered %lld frames, want 66150", (long long)frames);
 }
 
+static void testRemainingSeconds() {
+    std::printf("remaining seconds\n");
+    Engine eng;
+    CHECK(ambient_engine_remaining_seconds(eng.e) == 0.0, "idle engine has nothing remaining");
+
+    ambient_engine_start(eng.e, 10.0, 0.0, 0.0);
+    render(eng.e, kRate * 4);
+    CHECK(std::fabs(ambient_engine_remaining_seconds(eng.e) - 6.0) < 1e-9, "remaining %.6f, want 6",
+          ambient_engine_remaining_seconds(eng.e));
+    renderUntilFinished(eng.e, kRate * 10);
+    CHECK(ambient_engine_remaining_seconds(eng.e) == 0.0, "finished session has nothing remaining");
+
+    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    render(eng.e, kRate);
+    CHECK(ambient_engine_remaining_seconds(eng.e) < 0.0, "until-stopped session reports negative");
+}
+
+static void testPauseHoldsPlaceAndResumes() {
+    std::printf("pause holds the session's place and resumes\n");
+    Engine eng;
+    ambient_engine_start(eng.e, 10.0, 0.0, 0.0);
+    render(eng.e, kRate * 2);
+    CHECK(!ambient_engine_is_paused(eng.e), "not paused before pause");
+
+    ambient_engine_pause(eng.e, 0.1); // headphones out
+    const auto fade = render(eng.e, kRate / 2);
+    CHECK(rms(fade, 0, kRate / 50) > 0.0, "pause fades rather than cutting");
+    CHECK(soundingFrames(fade) <= int64_t(0.1 * kRate), "silent after the 0.1 s pause fade");
+    CHECK(ambient_engine_is_paused(eng.e) && ambient_engine_is_playing(eng.e), "paused session is still active");
+
+    const auto held = render(eng.e, kRate * 3);
+    CHECK(soundingFrames(held) == 0, "no output while paused");
+    CHECK(std::fabs(ambient_engine_elapsed_seconds(eng.e) - 2.1) < 1e-4, "elapsed frozen at %.4f, want 2.1",
+          ambient_engine_elapsed_seconds(eng.e));
+    CHECK(std::fabs(ambient_engine_remaining_seconds(eng.e) - 7.9) < 1e-4, "remaining %.4f, want 7.9",
+          ambient_engine_remaining_seconds(eng.e));
+
+    ambient_engine_resume(eng.e, 0.5);
+    const auto rise = render(eng.e, kRate);
+    CHECK(!ambient_engine_is_paused(eng.e), "resumed");
+    auto window = [&](double t) { return rms(rise, size_t(t * kRate), size_t((t + 0.05) * kRate)); };
+    CHECK(window(0.0) < 0.1 * window(0.8), "resume fades in from silence");
+    CHECK(window(0.1) < window(0.25) && window(0.25) < window(0.4), "level rises over the resume fade");
+
+    // 7.9 s remained at the pause; 1 s of it has now played.
+    const int64_t frames = renderUntilFinished(eng.e, kRate * 20);
+    CHECK(std::llabs(frames - int64_t(6.9 * kRate)) <= 2, "rest of session %lld frames, want %lld",
+          (long long)frames, (long long)(6.9 * kRate));
+}
+
+static void testStopWhilePausedEndsAtOnce() {
+    std::printf("stop while paused ends at once\n");
+    Engine eng;
+    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    render(eng.e, kRate);
+    ambient_engine_pause(eng.e, 0.05);
+    render(eng.e, kRate);
+    ambient_engine_stop(eng.e, 1.0);
+    int result = 1;
+    render(eng.e, kBlock, &result);
+    CHECK(result == 0 && !ambient_engine_is_playing(eng.e) && !ambient_engine_is_paused(eng.e),
+          "stop from pause should finish in the next block");
+}
+
+static void testDuckLowersLevelAndKeepsClock() {
+    std::printf("duck lowers the level within 500 ms and keeps the clock\n");
+    Engine eng;
+    ambient_engine_set_volume(eng.e, 1.0f);
+    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    render(eng.e, kRate);
+
+    ambient_engine_set_duck_gain(eng.e, 0.25f); // phone call: -12 dB
+    const auto ducking = render(eng.e, kRate);
+    auto window = [&](const std::vector<float>& x, double t) {
+        return rms(x, size_t(t * kRate), size_t((t + 0.1) * kRate));
+    };
+    const double early = toDb(window(ducking, 0.0) / 0.18);
+    const double settled = toDb(window(ducking, 0.5) / 0.18);
+    CHECK(early > -9.0, "duck ramps rather than cutting (%.1f dB in first 100 ms)", early);
+    CHECK(std::fabs(settled + 12.0) < 1.0, "ducked level %.1f dB, want -12 within 500 ms", settled);
+    CHECK(std::fabs(ambient_engine_elapsed_seconds(eng.e) - 2.0) < 1e-9, "clock kept running: %.4f",
+          ambient_engine_elapsed_seconds(eng.e));
+
+    ambient_engine_set_duck_gain(eng.e, 1.0f);
+    const auto restored = render(eng.e, kRate);
+    CHECK(std::fabs(toDb(window(restored, 0.5) / 0.18)) < 1.0, "level back to full after the duck");
+}
+
+// Amplitude of the sinusoid at `hz` in one channel (0 = left), by projection
+// over [from, to) frames. Exact for tones with whole cycles in the window.
+static double toneAmplitude(const std::vector<float>& x, int channel, double hz, size_t from, size_t to) {
+    std::complex<double> sum = 0;
+    for (size_t i = from; i < to; ++i) {
+        const double ph = 2.0 * std::numbers::pi * hz * double(i - from) / double(kRate);
+        sum += double(x[i * 2 + size_t(channel)]) * std::complex<double>(std::cos(ph), -std::sin(ph));
+    }
+    return 2.0 * std::abs(sum) / double(to - from);
+}
+
+static void testBinauralBeatToneAndLevel() {
+    std::printf("binaural beat: 180 Hz left, 180 + beat right, -6 dB under the noise\n");
+    // A sine with RMS kNoiseRms (0.18), 6 dB down: amplitude 0.18 * 0.5 * sqrt(2).
+    const double want = 0.18 * 0.5 * std::numbers::sqrt2;
+    Engine eng;
+    ambient_engine_set_volume(eng.e, 1.0f);
+    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    render(eng.e, kRate / 2);
+    // Tones are measured over 8 s so pink noise's own projection onto them
+    // (about 0.002, -36 dB re the tone) stays out of the way.
+    const auto off = render(eng.e, kRate * 8);
+    CHECK(toneAmplitude(off, 0, 180, 0, 8 * kRate) < 0.05 * want, "no tone while off");
+
+    ambient_engine_set_binaural(eng.e, 1);
+    ambient_engine_set_beat_frequency(eng.e, 4.0f);
+    render(eng.e, kRate / 2); // let the layer fade in
+    auto x = render(eng.e, kRate * 8);
+    const double left = toneAmplitude(x, 0, 180, 0, 8 * kRate);
+    const double right = toneAmplitude(x, 1, 184, 0, 8 * kRate);
+    CHECK(std::fabs(toDb(left / want)) < 0.5, "left 180 Hz is %.2f dB from target", toDb(left / want));
+    CHECK(std::fabs(toDb(right / want)) < 0.5, "right 184 Hz is %.2f dB from target", toDb(right / want));
+    CHECK(toneAmplitude(x, 0, 184, 0, 8 * kRate) < 0.05 * want, "left has no 184 Hz");
+    CHECK(toneAmplitude(x, 1, 180, 0, 8 * kRate) < 0.05 * want, "right has no 180 Hz");
+
+    ambient_engine_set_beat_frequency(eng.e, 10.0f);
+    render(eng.e, kRate / 2);
+    x = render(eng.e, kRate * 8);
+    CHECK(std::fabs(toDb(toneAmplitude(x, 1, 190, 0, 8 * kRate) / want)) < 0.5, "10 Hz beat puts right at 190 Hz");
+    CHECK(std::fabs(toDb(toneAmplitude(x, 0, 180, 0, 8 * kRate) / want)) < 0.5, "carrier stays at 180 Hz");
+
+    ambient_engine_set_volume(eng.e, 0.5f); // the beat follows the session volume
+    render(eng.e, kRate / 2);
+    x = render(eng.e, kRate * 8);
+    CHECK(std::fabs(toDb(toneAmplitude(x, 0, 180, 0, 8 * kRate) / (0.5 * want))) < 0.5, "beat follows volume");
+
+    ambient_engine_set_binaural(eng.e, 0);
+    const auto fading = render(eng.e, kRate / 2);
+    CHECK(toneAmplitude(fading, 0, 180, 0, kRate / 100) > 0.1 * 0.5 * want, "switching off fades, not cuts");
+    x = render(eng.e, kRate * 8);
+    CHECK(toneAmplitude(x, 0, 180, 0, 8 * kRate) < 0.05 * want, "no tone after switching off");
+}
+
 static void testFadeOutEndsInSilence() {
     std::printf("fade-out ends in silence\n");
     Engine eng;
@@ -239,6 +380,22 @@ static void testFadeOutEndsInSilence() {
     CHECK(window(3.85) < full * 0.01, "last 150 ms should be below -40 dB (%.1f dB)",
           toDb(window(3.85) / full));
     CHECK(soundingFrames(x) <= int64_t(4 * kRate), "nothing after the end");
+}
+
+static void testShortSessionShrinksBothFades() {
+    std::printf("short session shrinks both fades to fit\n");
+    // 13 s with a 5 s fade-in and 60 s fade-out: 65 s of fades scale by 13/65
+    // to a 1 s fade-in and a 12 s fade-out, so full level is reached at 1 s.
+    Engine eng;
+    ambient_engine_set_volume(eng.e, 1.0f);
+    ambient_engine_start(eng.e, 13.0, 5.0, 60.0);
+    const auto x = render(eng.e, kRate * 13);
+    auto window = [&](double t) { return rms(x, size_t(t * kRate), size_t((t + 0.05) * kRate)); };
+    CHECK(std::fabs(toDb(window(0.975) / 0.18)) < 1.0, "level at 1 s is %.1f dB from full",
+          toDb(window(0.975) / 0.18));
+    CHECK(window(0.3) < window(0.6) && window(0.6) < window(0.9), "level should rise to 1 s");
+    CHECK(window(4.0) < window(1.2) && window(10.0) < window(4.0), "level should fall after 1 s");
+    CHECK(soundingFrames(x) <= int64_t(13 * kRate), "nothing after the end");
 }
 
 static void testFadeInIsSmooth() {
@@ -288,7 +445,15 @@ static void testRenderDoesNotAllocate() {
     for (int i = 0; i < 3000; ++i) {
         if (i % 200 == 0) ambient_engine_set_noise_color(eng.e, ambient_noise_color(i / 200 % 3));
         if (i % 300 == 0) ambient_engine_set_volume(eng.e, float(i % 7) / 7.0f);
+        if (i == 100) ambient_engine_set_binaural(eng.e, 1);
+        if (i % 250 == 0) ambient_engine_set_beat_frequency(eng.e, float(2 + i / 250 % 5 * 2));
+        if (i == 400) ambient_engine_set_duck_gain(eng.e, 0.3f);
+        if (i == 600) ambient_engine_set_duck_gain(eng.e, 1.0f);
+        if (i == 700) ambient_engine_pause(eng.e, 0.2);
+        if (i == 900) ambient_engine_resume(eng.e, 1.0);
+        if (i == 1200) ambient_engine_set_binaural(eng.e, 0);
         if (i == 1500) ambient_engine_stop(eng.e, 2.0);
+        if (i == 2500) ambient_engine_pause(eng.e, 0.1);
         if (i == 2000) ambient_engine_start(eng.e, 5.0, 1.0, 1.0);
         ambient_engine_render(eng.e, block.data(), kBlock);
     }
@@ -301,8 +466,14 @@ int main() {
     testDeterminism();
     testTimerIsFrameAccurate();
     testTimerSurvivesSampleRateChange();
+    testRemainingSeconds();
+    testPauseHoldsPlaceAndResumes();
+    testStopWhilePausedEndsAtOnce();
+    testDuckLowersLevelAndKeepsClock();
+    testBinauralBeatToneAndLevel();
     testFadeOutEndsInSilence();
     testFadeInIsSmooth();
+    testShortSessionShrinksBothFades();
     testStopFadesAndFinishes();
     testNeverClips();
     testRenderDoesNotAllocate();
