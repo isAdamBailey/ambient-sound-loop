@@ -18,6 +18,7 @@ namespace {
 using ambient::dsp::BrownFilter;
 using ambient::dsp::kWhiteGain;
 using ambient::dsp::PinkFilter;
+using ambient::dsp::ResonantBoom;
 using ambient::dsp::SineOscillator;
 using ambient::dsp::Xoshiro256;
 
@@ -31,6 +32,9 @@ constexpr double kCarrierHz = 180.0;
 constexpr float kMinBeatHz = 1.0f;
 constexpr float kMaxBeatHz = 30.0f;
 constexpr float kBinauralMix = 0.5f; // -6 dB under the noise
+constexpr float kMinBoomSeconds = 1.0f;
+constexpr float kMaxBoomSeconds = 16.0f;
+constexpr float kDefaultBoomSeconds = 8.0f;
 
 struct Command {
     enum class Type { Start, Stop, Pause, Resume } type;
@@ -64,6 +68,20 @@ inline float softClip(float x) {
     return std::copysign(y, x);
 }
 
+// Linear through the bed. Only the hottest peaks round off, so brown stays
+// clean and a strike still has room beside it.
+inline float holdBed(float x) {
+    constexpr float kKnee = 0.70f;
+    constexpr float kLimit = 0.85f;
+    const float a = std::fabs(x);
+    if (a <= kKnee) {
+        return x;
+    }
+    const float span = kLimit - kKnee;
+    const float y = kKnee + span * std::tanh((a - kKnee) / span);
+    return std::copysign(y, x);
+}
+
 struct Channel {
     Xoshiro256 rng;
     PinkFilter pink;
@@ -80,6 +98,8 @@ struct ambient_engine {
     std::atomic<float> duck{1.0f};
     std::atomic<bool> binaural{false};
     std::atomic<float> beatHz{4.0f};
+    std::atomic<bool> boom{false};
+    std::atomic<float> boomInterval{kDefaultBoomSeconds};
 
     // ---- audio -> control ----
     std::atomic<double> elapsedReport{0.0};
@@ -98,7 +118,9 @@ struct ambient_engine {
     float smoothedVolume = 0.5f;
     float smoothedDuck = 1.0f;
     float binauralGain = 0.0f;
+    float boomGain = 0.0f;
     SineOscillator tones[2]; // left: carrier, right: carrier + beat
+    ResonantBoom resonator;
 
     bool active = false;
     double elapsedBase = 0.0;   // seconds rendered before the current rate segment
@@ -132,6 +154,7 @@ struct ambient_engine {
         for (auto& ch : channels) {
             ch.brown.setSampleRate(newRate);
         }
+        resonator.setSampleRate(newRate);
     }
 
     double now(int64_t extraFrames = 0) const {
@@ -253,6 +276,8 @@ struct ambient_engine {
         const float targetDuck = duck.load(std::memory_order_relaxed);
         const bool binauralOn = binaural.load(std::memory_order_relaxed);
         const float targetBinaural = binauralOn ? kBinauralMix : 0.0f;
+        const bool boomOn = boom.load(std::memory_order_relaxed);
+        const double boomEvery = static_cast<double>(boomInterval.load(std::memory_order_relaxed));
         const double toneStep[2] = {
             kCarrierHz * invRate,
             (kCarrierHz + static_cast<double>(beatHz.load(std::memory_order_relaxed))) * invRate,
@@ -282,29 +307,38 @@ struct ambient_engine {
                 colorGain[c] += smoothCoeff * (target - colorGain[c]);
             }
             binauralGain += smoothCoeff * (targetBinaural - binauralGain);
+            boomGain += smoothCoeff * ((boomOn ? 1.0f : 0.0f) - boomGain);
             const bool toneAudible = binauralGain > kSilent || binauralOn;
+            const bool boomAudible = boomGain > kSilent || boomOn;
+            if (boomAudible) resonator.arm();
+            else resonator.reset();
             const float gain = smoothedVolume * smoothedDuck * static_cast<float>(env);
 
             for (int ch = 0; ch < 2; ++ch) {
                 Channel& chan = channels[ch];
                 const float white = chan.rng.bipolar();
-                float mix = 0.0f;
+                float noise = 0.0f;
                 if (colorGain[AMBIENT_NOISE_WHITE] > kSilent) {
-                    mix += colorGain[AMBIENT_NOISE_WHITE] * white * kWhiteGain;
+                    noise += colorGain[AMBIENT_NOISE_WHITE] * white * kWhiteGain;
                 }
                 // Filters keep running while audible or fading in; skipped
                 // only when fully silent (their state then fades in from 0).
                 if (colorGain[AMBIENT_NOISE_PINK] > kSilent || targetColor == AMBIENT_NOISE_PINK) {
-                    mix += colorGain[AMBIENT_NOISE_PINK] * chan.pink.process(white);
+                    noise += colorGain[AMBIENT_NOISE_PINK] * chan.pink.process(white);
                 }
                 if (colorGain[AMBIENT_NOISE_BROWN] > kSilent || targetColor == AMBIENT_NOISE_BROWN) {
-                    mix += colorGain[AMBIENT_NOISE_BROWN] * chan.brown.process(white);
+                    noise += colorGain[AMBIENT_NOISE_BROWN] * chan.brown.process(white);
                 }
+                float layer = 0.0f;
                 if (toneAudible) {
-                    mix += binauralGain * tones[ch].process(toneStep[ch]);
+                    layer += binauralGain * tones[ch].process(toneStep[ch]);
                 }
-                out[2 * n + ch] = softClip(mix * gain);
+                if (boomAudible) {
+                    layer += boomGain * resonator.sample(ch);
+                }
+                out[2 * n + ch] = softClip(holdBed(noise * gain) + layer * gain);
             }
+            if (boomAudible) resonator.advance(boomEvery);
         }
 
         const double elapsed = active ? now() : 0.0;
@@ -377,6 +411,19 @@ void ambient_engine_set_binaural(ambient_engine* engine, int enabled) {
 void ambient_engine_set_beat_frequency(ambient_engine* engine, float beat_hz) {
     if (engine != nullptr && !std::isnan(beat_hz)) {
         engine->beatHz.store(std::clamp(beat_hz, kMinBeatHz, kMaxBeatHz), std::memory_order_relaxed);
+    }
+}
+
+void ambient_engine_set_boom(ambient_engine* engine, int enabled) {
+    if (engine != nullptr) {
+        engine->boom.store(enabled != 0, std::memory_order_relaxed);
+    }
+}
+
+void ambient_engine_set_boom_interval(ambient_engine* engine, float seconds) {
+    if (engine != nullptr && !std::isnan(seconds)) {
+        engine->boomInterval.store(std::clamp(seconds, kMinBoomSeconds, kMaxBoomSeconds),
+                                    std::memory_order_relaxed);
     }
 }
 

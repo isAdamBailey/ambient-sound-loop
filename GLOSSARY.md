@@ -21,5 +21,9 @@ A session with no set duration. Its clock shows elapsed time.
 _Avoid_: Open-ended, infinite
 
 **Last session**:
-The noise color, volume, session length, and binaural beat settings last used on that device. Restored stopped, never resumed.
+The noise color, session length, binaural beat, and boom settings last used on that device. Restored stopped, never resumed. Loudness is the device volume.
 _Avoid_: Preset, saved mix
+
+**Boom**:
+A low resonant strike that alternates ears at a slow rate. Off until the listener turns it on. Independent of the binaural beat.
+_Avoid_: Drum, kick

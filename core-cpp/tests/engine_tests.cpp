@@ -36,6 +36,9 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 // ---------------------------------------------------------------------------
 static int g_failures = 0;
 
+// White and pink at full volume: 8 dB under the old 0.18 reference.
+constexpr double kBedRms = 0.07165929;
+
 #define CHECK(cond, ...)                                                              \
     do {                                                                              \
         if (!(cond)) {                                                                \
@@ -176,9 +179,11 @@ static void testSpectralSlopeAndLevel() {
         CHECK(std::fabs(slope - c.slopeDbPerOctave) < 0.5, "%s slope %.2f dB/oct, want %.1f", c.name, slope,
               c.slopeDbPerOctave);
 
-        // Every colour lands within 1 dB of the same RMS (0.18).
+        // White and pink are 8 dB under the old 0.18 reference. Brown is 9 dB
+        // above them (about +1 dB versus 0.18) so it matches by ear and stays clean.
+        const double targetDb = c.color == AMBIENT_NOISE_BROWN ? 1.0 : -8.0;
         const double level = toDb(rms(x, 0, x.size() / 2) / 0.18);
-        CHECK(std::fabs(level) < 1.0, "%s level %.2f dB from target", c.name, level);
+        CHECK(std::fabs(level - targetDb) < 1.0, "%s level %.2f dB, want %.1f", c.name, level, targetDb);
     }
 }
 
@@ -314,8 +319,8 @@ static void testDuckLowersLevelAndKeepsClock() {
     auto window = [&](const std::vector<float>& x, double t) {
         return rms(x, size_t(t * kRate), size_t((t + 0.1) * kRate));
     };
-    const double early = toDb(window(ducking, 0.0) / 0.18);
-    const double settled = toDb(window(ducking, 0.5) / 0.18);
+    const double early = toDb(window(ducking, 0.0) / kBedRms);
+    const double settled = toDb(window(ducking, 0.5) / kBedRms);
     CHECK(early > -9.0, "duck ramps rather than cutting (%.1f dB in first 100 ms)", early);
     CHECK(std::fabs(settled + 12.0) < 1.0, "ducked level %.1f dB, want -12 within 500 ms", settled);
     CHECK(std::fabs(ambient_engine_elapsed_seconds(eng.e) - 2.0) < 1e-9, "clock kept running: %.4f",
@@ -323,7 +328,7 @@ static void testDuckLowersLevelAndKeepsClock() {
 
     ambient_engine_set_duck_gain(eng.e, 1.0f);
     const auto restored = render(eng.e, kRate);
-    CHECK(std::fabs(toDb(window(restored, 0.5) / 0.18)) < 1.0, "level back to full after the duck");
+    CHECK(std::fabs(toDb(window(restored, 0.5) / kBedRms)) < 1.0, "level back to full after the duck");
 }
 
 // Amplitude of the sinusoid at `hz` in one channel (0 = left), by projection
@@ -339,8 +344,8 @@ static double toneAmplitude(const std::vector<float>& x, int channel, double hz,
 
 static void testBinauralBeatToneAndLevel() {
     std::printf("binaural beat: 180 Hz left, 180 + beat right, -6 dB under the noise\n");
-    // A sine with RMS kNoiseRms (0.18), 6 dB down: amplitude 0.18 * 0.5 * sqrt(2).
-    const double want = 0.18 * 0.5 * std::numbers::sqrt2;
+    // A sine with RMS kBedRms, 6 dB down: amplitude kBedRms * 0.5 * sqrt(2).
+    const double want = kBedRms * 0.5 * std::numbers::sqrt2;
     Engine eng;
     ambient_engine_set_volume(eng.e, 1.0f);
     ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
@@ -379,6 +384,66 @@ static void testBinauralBeatToneAndLevel() {
     CHECK(toneAmplitude(x, 0, 180, 0, 8 * kRate) < 0.05 * want, "no tone after switching off");
 }
 
+static void testBoomAlternatesEars() {
+    std::printf("boom strikes left then right, under the noise, with the beat\n");
+    Engine quiet(kRate, 9), struck(kRate, 9);
+    ambient_engine_set_volume(quiet.e, 1.0f);
+    ambient_engine_set_volume(struck.e, 1.0f);
+    ambient_engine_set_boom(struck.e, 1);
+    ambient_engine_set_boom_interval(struck.e, 4.0f);
+    ambient_engine_set_binaural(quiet.e, 1);
+    ambient_engine_set_binaural(struck.e, 1);
+    ambient_engine_set_beat_frequency(quiet.e, 4.0f);
+    ambient_engine_set_beat_frequency(struck.e, 4.0f);
+    for (auto* e : {quiet.e, struck.e}) ambient_engine_start(e, 0.0, 0.0, 0.0);
+
+    const auto a = render(quiet.e, kRate * 8);
+    const auto b = render(struck.e, kRate * 8);
+    std::vector<float> diff(a.size());
+    float peak = 0;
+    for (size_t i = 0; i < a.size(); ++i) {
+        diff[i] = b[i] - a[i];
+        peak = std::max(peak, std::fabs(b[i]));
+    }
+    CHECK(peak < 1.0f, "boom plus noise plus beat peaks at %.3f", peak);
+
+    auto side = [&](int channel, size_t from, size_t to) {
+        double sum = 0;
+        for (size_t i = from; i < to; ++i) {
+            const float s = diff[i * 2 + size_t(channel)];
+            sum += double(s) * s;
+        }
+        return std::sqrt(sum / double(to - from));
+    };
+    const size_t attack = size_t(0.12 * kRate);
+    CHECK(side(0, size_t(0.02 * kRate), attack) > 5.0 * side(1, size_t(0.02 * kRate), attack),
+          "the first strike is in the left ear");
+    const size_t second = 4 * kRate;
+    CHECK(side(1, second, second + attack) > 5.0 * side(0, second, second + attack),
+          "the next strike is in the right ear");
+
+    const size_t toneEnd = size_t(0.4 * kRate);
+    const double low = toneAmplitude(diff, 0, 52, size_t(0.05 * kRate), toneEnd);
+    const double octave = toneAmplitude(diff, 0, 104, size_t(0.05 * kRate), toneEnd);
+    CHECK(low > 0.12, "the strike rings at 52 Hz (amplitude %.3f)", low);
+    CHECK(octave > 0.08, "the octave is loud enough to hear (amplitude %.3f)", octave);
+
+    const double want = kBedRms * 0.5 * std::numbers::sqrt2;
+    const double leftBeat = toneAmplitude(b, 0, 180, kRate, 2 * kRate);
+    CHECK(std::fabs(toDb(leftBeat / want)) < 1.0, "binaural stays with the boom, %.2f dB", toDb(leftBeat / want));
+
+    ambient_engine_set_boom(struck.e, 0);
+    const auto gone = render(struck.e, kRate);
+    const auto still = render(quiet.e, kRate);
+    double leftover = 0;
+    for (size_t i = gone.size() / 2; i < gone.size(); ++i) {
+        const double d = double(gone[i]) - still[i];
+        leftover += d * d;
+    }
+    leftover = std::sqrt(leftover / double(gone.size() / 2));
+    CHECK(leftover < 0.01, "switching the boom off fades it out (residual %.4f)", leftover);
+}
+
 static void testFadeOutEndsInSilence() {
     std::printf("fade-out ends in silence\n");
     Engine eng;
@@ -405,8 +470,8 @@ static void testShortSessionShrinksBothFades() {
     ambient_engine_start(eng.e, 13.0, 5.0, 60.0);
     const auto x = render(eng.e, kRate * 13);
     auto window = [&](double t) { return rms(x, size_t(t * kRate), size_t((t + 0.05) * kRate)); };
-    CHECK(std::fabs(toDb(window(0.975) / 0.18)) < 1.0, "level at 1 s is %.1f dB from full",
-          toDb(window(0.975) / 0.18));
+    CHECK(std::fabs(toDb(window(0.975) / kBedRms)) < 1.0, "level at 1 s is %.1f dB from full",
+          toDb(window(0.975) / kBedRms));
     CHECK(window(0.3) < window(0.6) && window(0.6) < window(0.9), "level should rise to 1 s");
     CHECK(window(4.0) < window(1.2) && window(10.0) < window(4.0), "level should fall after 1 s");
     CHECK(soundingFrames(x) <= int64_t(13 * kRate), "nothing after the end");
@@ -460,6 +525,9 @@ static void testRenderDoesNotAllocate() {
         if (i % 200 == 0) ambient_engine_set_noise_color(eng.e, ambient_noise_color(i / 200 % 3));
         if (i % 300 == 0) ambient_engine_set_volume(eng.e, float(i % 7) / 7.0f);
         if (i == 100) ambient_engine_set_binaural(eng.e, 1);
+        if (i == 150) ambient_engine_set_boom(eng.e, 1);
+        if (i % 280 == 0) ambient_engine_set_boom_interval(eng.e, float(2 + (i / 280) % 3 * 2));
+        if (i == 1300) ambient_engine_set_boom(eng.e, 0);
         if (i % 250 == 0) ambient_engine_set_beat_frequency(eng.e, float(2 + i / 250 % 5 * 2));
         if (i == 400) ambient_engine_set_duck_gain(eng.e, 0.3f);
         if (i == 600) ambient_engine_set_duck_gain(eng.e, 1.0f);
@@ -490,6 +558,7 @@ int main() {
     testStopDuringPauseFadeFinishes();
     testDuckLowersLevelAndKeepsClock();
     testBinauralBeatToneAndLevel();
+    testBoomAlternatesEars();
     testFadeOutEndsInSilence();
     testFadeInIsSmooth();
     testShortSessionShrinksBothFades();

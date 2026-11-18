@@ -21,7 +21,7 @@ Tool shells skip `~/.zshrc`, so run `flutter`, `adb`, `pod` and `emulator` throu
 - **Control → audio** goes only through `std::atomic` parameters (smoothed on the audio thread) or the `SpscQueue` of `Command`s. Never share other mutable state between threads.
 - **The C ABI is the boundary.** UIs and platform layers include only `core-cpp/include/ambient_engine.h`. Keep it C (no C++ types), and document the threading of each new function there.
 - **Time, not samples.** The session timer is seconds of rendered audio, folded on `ambient_engine_set_sample_rate`. Do not store durations as sample counts.
-- **Levels.** Every generator is normalised to `dsp::kNoiseRms` so switching keeps loudness; a new generator gets a level test like `testSpectralSlopeAndLevel`.
+- **Levels.** White and pink are normalised to `dsp::kNoiseRms`. Brown is about 9 dB above that (`BrownFilter::kOpenRms`) so it matches them by ear and stays clean on a phone speaker. A new generator gets a level test like `testSpectralSlopeAndLevel`. The session screen sets the engine gain to full scale; the device volume is the loudness control.
 - Tests are a plain executable (`core-cpp/tests/engine_tests.cpp`, `CHECK` macro): add a `test…()` function and call it from `main()`.
 
 ## Agent skills

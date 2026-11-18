@@ -51,11 +51,19 @@ void ambient_engine_set_duck_gain(ambient_engine* engine, float gain);
 
 /* Binaural beat: a stereo tone layer on top of the noise, a fixed 180 Hz
  * carrier in the left channel and 180 Hz + beat in the right. It follows the
- * session volume and envelope and sits 6 dB under the noise. Switching it on
+ * session volume and envelope and sits 6 dB under white and pink. Switching it on
  * or off is smoothed; changing the beat keeps phase, so neither clicks. Off by
  * default, beat 4 Hz. Control thread (atomics). */
 void ambient_engine_set_binaural(ambient_engine* engine, int enabled);
 void ambient_engine_set_beat_frequency(ambient_engine* engine, float beat_hz); /* clamped to [1, 30] Hz */
+
+/* A low resonant boom that strikes left, then right, then left. It follows
+ * the session volume and envelope, and it is independent of the binaural
+ * beat. `seconds` is the gap between strikes, clamped to [1, 16]. Off by
+ * default, gap 8 s. Switching it on strikes at once; switching it off fades.
+ * Control thread (atomics). */
+void ambient_engine_set_boom(ambient_engine* engine, int enabled);
+void ambient_engine_set_boom_interval(ambient_engine* engine, float seconds);
 
 /* Start a session. duration_seconds <= 0 plays until stopped. The fade-in is
  * a raised-cosine S-curve; the fade-out occupies the final fade_out_seconds of
