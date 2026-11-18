@@ -4,6 +4,7 @@
 
 #include "denormals.hpp"
 #include "dsp/noise.hpp"
+#include "dsp/tone.hpp"
 #include "spsc_queue.hpp"
 
 #include <algorithm>
@@ -17,17 +18,25 @@ namespace {
 using ambient::dsp::BrownFilter;
 using ambient::dsp::kWhiteGain;
 using ambient::dsp::PinkFilter;
+using ambient::dsp::SineOscillator;
 using ambient::dsp::Xoshiro256;
 
 constexpr int kColorCount = 3;
 constexpr double kSmoothingSeconds = 0.03; // parameter smoothing time constant
+constexpr double kDuckSeconds = 0.1;       // duck time constant: settles in ~500 ms
 constexpr float kSilent = 1e-6f;
 
+// Binaural beat: a fixed carrier in the left ear, carrier + beat in the right.
+constexpr double kCarrierHz = 180.0;
+constexpr float kMinBeatHz = 1.0f;
+constexpr float kMaxBeatHz = 30.0f;
+constexpr float kBinauralMix = 0.5f; // -6 dB under the noise
+
 struct Command {
-    enum class Type { Start, Stop } type;
+    enum class Type { Start, Stop, Pause, Resume } type;
     double duration;
-    double fadeIn;
-    double fadeOut; // Stop: the stop fade
+    double fadeIn;  // Resume: the resume fade
+    double fadeOut; // Stop, Pause: their fade
 };
 
 // Raised-cosine S-curve on [0, 1].
@@ -68,19 +77,28 @@ struct ambient_engine {
     ambient::engine::SpscQueue<Command, 16> commands;
     std::atomic<int> color{AMBIENT_NOISE_PINK};
     std::atomic<float> volume{0.5f};
+    std::atomic<float> duck{1.0f};
+    std::atomic<bool> binaural{false};
+    std::atomic<float> beatHz{4.0f};
 
     // ---- audio -> control ----
     std::atomic<double> elapsedReport{0.0};
+    std::atomic<double> remainingReport{0.0};
     std::atomic<bool> playingReport{false};
+    std::atomic<bool> pausedReport{false};
 
     // ---- audio thread state ----
     double rate = 48000.0;
     double invRate = 1.0 / 48000.0;
     float smoothCoeff = 0.0f;
+    float duckCoeff = 0.0f;
 
     Channel channels[2];
     float colorGain[kColorCount] = {0.0f, 0.0f, 0.0f};
     float smoothedVolume = 0.5f;
+    float smoothedDuck = 1.0f;
+    float binauralGain = 0.0f;
+    SineOscillator tones[2]; // left: carrier, right: carrier + beat
 
     bool active = false;
     double elapsedBase = 0.0;   // seconds rendered before the current rate segment
@@ -96,10 +114,21 @@ struct ambient_engine {
     double stopLevel = 0.0;
     double stopFade = 0.0;
 
+    // Pause/resume: a hold gain multiplies the session envelope. Once a pause
+    // fade reaches zero the session is paused and its timer stops.
+    bool paused = false;
+    bool holdRamping = false;
+    double holdLevel = 1.0;  // last hold gain
+    double holdFrom = 1.0;   // hold gain when the current ramp began
+    double holdTarget = 1.0; // 0: pausing, 1: resuming
+    double holdAt = 0.0;
+    double holdFade = 0.0;
+
     void applyRate(double newRate) {
         rate = newRate;
         invRate = 1.0 / newRate;
         smoothCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (kSmoothingSeconds * newRate)));
+        duckCoeff = static_cast<float>(1.0 - std::exp(-1.0 / (kDuckSeconds * newRate)));
         for (auto& ch : channels) {
             ch.brown.setSampleRate(newRate);
         }
@@ -115,24 +144,76 @@ struct ambient_engine {
             startLevel = active ? envelope : 0.0;
             active = true;
             stopping = false;
+            paused = false;
+            holdRamping = false;
+            holdLevel = 1.0;
+            holdTarget = 1.0;
             elapsedBase = 0.0;
             segmentFrames = 0;
             duration = cmd.duration > 0.0 ? cmd.duration : 0.0;
             fadeIn = std::max(cmd.fadeIn, 0.0);
             fadeOut = std::max(cmd.fadeOut, 0.0);
-            if (duration > 0.0) {
-                fadeOut = std::min(fadeOut, duration);
+            // Too short for both fades: shrink them in proportion to fit.
+            if (duration > 0.0 && fadeIn + fadeOut > duration) {
+                const double scale = duration / (fadeIn + fadeOut);
+                fadeIn *= scale;
+                fadeOut *= scale;
             }
             break;
         case Command::Type::Stop:
-            if (active && !stopping) {
+            if (paused) { // already silent: finish at once
+                active = false;
+                paused = false;
+            } else if (active && !stopping) {
                 stopping = true;
                 stopAt = now();
                 stopLevel = envelope;
                 stopFade = std::max(cmd.fadeOut, invRate);
             }
             break;
+        case Command::Type::Pause:
+            if (active && !paused && !stopping) {
+                beginHoldRamp(0.0, cmd.fadeOut);
+            }
+            break;
+        case Command::Type::Resume:
+            if (active && !stopping && (paused || holdTarget == 0.0)) {
+                paused = false;
+                beginHoldRamp(1.0, cmd.fadeIn);
+            }
+            break;
         }
+    }
+
+    void beginHoldRamp(double target, double fade) {
+        holdFrom = holdLevel;
+        holdTarget = target;
+        holdAt = now();
+        holdFade = std::max(fade, invRate);
+        holdRamping = true;
+    }
+
+    // Hold gain at session time t; sets paused=true when a pause completes.
+    double holdGainAt(double t) {
+        if (!holdRamping) {
+            return holdLevel;
+        }
+        const double u = (t - holdAt) / holdFade;
+        if (u >= 1.0) {
+            holdRamping = false;
+            holdLevel = holdTarget;
+            if (holdTarget == 0.0) {
+                // Silent now. A stop that arrived mid-fade finishes here
+                // rather than pausing (its timer would never run out).
+                paused = !stopping;
+                active = !stopping;
+            }
+        } else if (holdTarget == 0.0) {
+            holdLevel = holdFrom * fadeOutCurve(u);
+        } else {
+            holdLevel = holdFrom + (1.0 - holdFrom) * sCurve(u);
+        }
+        return holdLevel;
     }
 
     // Envelope at session time t; sets active=false when the session ends.
@@ -148,6 +229,7 @@ struct ambient_engine {
                 g = std::min(g, fadeOutCurve((t - fadeStart) / fadeOut));
             }
         }
+        g *= holdGainAt(t);
         if (stopping) {
             const double u = (t - stopAt) / stopFade;
             if (u >= 1.0) {
@@ -168,9 +250,16 @@ struct ambient_engine {
 
         const int targetColor = color.load(std::memory_order_relaxed);
         const float targetVolume = volume.load(std::memory_order_relaxed);
+        const float targetDuck = duck.load(std::memory_order_relaxed);
+        const bool binauralOn = binaural.load(std::memory_order_relaxed);
+        const float targetBinaural = binauralOn ? kBinauralMix : 0.0f;
+        const double toneStep[2] = {
+            kCarrierHz * invRate,
+            (kCarrierHz + static_cast<double>(beatHz.load(std::memory_order_relaxed))) * invRate,
+        };
 
         for (int32_t n = 0; n < frames; ++n) {
-            if (!active) {
+            if (!active || paused) { // paused: silent, timer held
                 envelope = 0.0;
                 out[2 * n] = 0.0f;
                 out[2 * n + 1] = 0.0f;
@@ -179,7 +268,7 @@ struct ambient_engine {
 
             const double env = envelopeAt(now());
             envelope = env;
-            if (!active) { // finished exactly at this frame
+            if (!active || paused) { // finished or paused exactly at this frame
                 out[2 * n] = 0.0f;
                 out[2 * n + 1] = 0.0f;
                 continue;
@@ -187,11 +276,14 @@ struct ambient_engine {
             ++segmentFrames;
 
             smoothedVolume += smoothCoeff * (targetVolume - smoothedVolume);
+            smoothedDuck += duckCoeff * (targetDuck - smoothedDuck);
             for (int c = 0; c < kColorCount; ++c) {
                 const float target = c == targetColor ? 1.0f : 0.0f;
                 colorGain[c] += smoothCoeff * (target - colorGain[c]);
             }
-            const float gain = smoothedVolume * static_cast<float>(env);
+            binauralGain += smoothCoeff * (targetBinaural - binauralGain);
+            const bool toneAudible = binauralGain > kSilent || binauralOn;
+            const float gain = smoothedVolume * smoothedDuck * static_cast<float>(env);
 
             for (int ch = 0; ch < 2; ++ch) {
                 Channel& chan = channels[ch];
@@ -208,12 +300,22 @@ struct ambient_engine {
                 if (colorGain[AMBIENT_NOISE_BROWN] > kSilent || targetColor == AMBIENT_NOISE_BROWN) {
                     mix += colorGain[AMBIENT_NOISE_BROWN] * chan.brown.process(white);
                 }
+                if (toneAudible) {
+                    mix += binauralGain * tones[ch].process(toneStep[ch]);
+                }
                 out[2 * n + ch] = softClip(mix * gain);
             }
         }
 
-        elapsedReport.store(active ? now() : 0.0, std::memory_order_relaxed);
+        const double elapsed = active ? now() : 0.0;
+        double remaining = 0.0;
+        if (active) {
+            remaining = duration > 0.0 ? std::max(duration - elapsed, 0.0) : -1.0;
+        }
+        elapsedReport.store(elapsed, std::memory_order_relaxed);
+        remainingReport.store(remaining, std::memory_order_relaxed);
         playingReport.store(active, std::memory_order_relaxed);
+        pausedReport.store(active && paused, std::memory_order_relaxed);
         return active ? 1 : 0;
     }
 };
@@ -260,6 +362,24 @@ void ambient_engine_set_volume(ambient_engine* engine, float volume) {
     }
 }
 
+void ambient_engine_set_duck_gain(ambient_engine* engine, float gain) {
+    if (engine != nullptr && !std::isnan(gain)) {
+        engine->duck.store(std::clamp(gain, 0.0f, 1.0f), std::memory_order_relaxed);
+    }
+}
+
+void ambient_engine_set_binaural(ambient_engine* engine, int enabled) {
+    if (engine != nullptr) {
+        engine->binaural.store(enabled != 0, std::memory_order_relaxed);
+    }
+}
+
+void ambient_engine_set_beat_frequency(ambient_engine* engine, float beat_hz) {
+    if (engine != nullptr && !std::isnan(beat_hz)) {
+        engine->beatHz.store(std::clamp(beat_hz, kMinBeatHz, kMaxBeatHz), std::memory_order_relaxed);
+    }
+}
+
 int ambient_engine_start(ambient_engine* engine, double duration_seconds,
                          double fade_in_seconds, double fade_out_seconds) {
     if (engine == nullptr) {
@@ -278,6 +398,20 @@ int ambient_engine_stop(ambient_engine* engine, double fade_seconds) {
     return engine->commands.push({Command::Type::Stop, 0.0, 0.0, fade_seconds}) ? 1 : 0;
 }
 
+int ambient_engine_pause(ambient_engine* engine, double fade_seconds) {
+    if (engine == nullptr) {
+        return 0;
+    }
+    return engine->commands.push({Command::Type::Pause, 0.0, 0.0, fade_seconds}) ? 1 : 0;
+}
+
+int ambient_engine_resume(ambient_engine* engine, double fade_in_seconds) {
+    if (engine == nullptr) {
+        return 0;
+    }
+    return engine->commands.push({Command::Type::Resume, 0.0, fade_in_seconds, 0.0}) ? 1 : 0;
+}
+
 int ambient_engine_render(ambient_engine* engine, float* out, int32_t frames) {
     if (engine == nullptr || out == nullptr || frames <= 0) {
         return 0;
@@ -289,8 +423,16 @@ double ambient_engine_elapsed_seconds(const ambient_engine* engine) {
     return engine != nullptr ? engine->elapsedReport.load(std::memory_order_relaxed) : 0.0;
 }
 
+double ambient_engine_remaining_seconds(const ambient_engine* engine) {
+    return engine != nullptr ? engine->remainingReport.load(std::memory_order_relaxed) : 0.0;
+}
+
 int ambient_engine_is_playing(const ambient_engine* engine) {
     return engine != nullptr && engine->playingReport.load(std::memory_order_relaxed) ? 1 : 0;
+}
+
+int ambient_engine_is_paused(const ambient_engine* engine) {
+    return engine != nullptr && engine->pausedReport.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
 } // extern "C"

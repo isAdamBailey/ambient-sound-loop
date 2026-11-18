@@ -9,7 +9,11 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release   # add -DAMBIENT_BUILD_
 cmake --build build
 ctest --test-dir build --output-on-failure
 ./build/platform-audio/desktop/ambient_play --help
+flutter doctor                              # app toolchain: README "App dev environment"
+flutter emulators --launch ambient_phone    # Android emulator for this project
 ```
+
+Tool shells skip `~/.zshrc`, so run `flutter`, `adb`, `pod` and `emulator` through `zsh -i -c '…'`. `/usr/local/bin/brew` is an Intel build under Rosetta; install arm64 tools with `/opt/homebrew/bin/brew`.
 
 ## Rules
 
@@ -19,3 +23,9 @@ ctest --test-dir build --output-on-failure
 - **Time, not samples.** The session timer is seconds of rendered audio, folded on `ambient_engine_set_sample_rate`. Do not store durations as sample counts.
 - **Levels.** Every generator is normalised to `dsp::kNoiseRms` so switching keeps loudness; a new generator gets a level test like `testSpectralSlopeAndLevel`.
 - Tests are a plain executable (`core-cpp/tests/engine_tests.cpp`, `CHECK` macro): add a `test…()` function and call it from `main()`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as GitHub issues. See `docs/agents/issue-tracker.md`.

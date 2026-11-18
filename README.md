@@ -37,6 +37,30 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+## App dev environment (macOS)
+
+The session screen app (Flutter, `app-ui/`, issue #10) needs this toolchain. Set up on 2026-11-17; `flutter doctor` is clean apart from the Android SDK licenses, which the owner accepts with `flutter doctor --android-licenses`.
+
+| Tool | Where | Notes |
+| --- | --- | --- |
+| Flutter stable (3.50) | `~/development/flutter` | Git clone of the `stable` branch, native arm64. Update with `flutter upgrade`. |
+| JDK 21 (Temurin, arm64) | `~/Library/Java/JavaVirtualMachines` | Set for Flutter with `flutter config --jdk-dir "$(/usr/libexec/java_home -v 21)"`. |
+| Android SDK | `~/Library/Android/sdk` | Command-line tools, no Android Studio. Emulator `ambient_phone` (Pixel 8, API 36, arm64). |
+| Xcode 27.2 + iOS 27 Simulator | `/Applications/Xcode.app` | |
+| CocoaPods | `/opt/homebrew/bin/pod` | From the native arm64 Homebrew. |
+
+`~/.zshrc` sets `ANDROID_HOME` and `JAVA_HOME` and puts Flutter and the Android `platform-tools`, `emulator` and `cmdline-tools` on `PATH`. `/opt/homebrew/bin` goes **last**, because `/usr/local` holds an Intel (Rosetta) Homebrew that stays the default `brew`; install arm64 tools with `/opt/homebrew/bin/brew`.
+
+```bash
+flutter doctor
+flutter emulators --launch ambient_phone          # Android emulator
+xcrun simctl boot "iPhone 18 Pro" && open -a Simulator
+flutter devices
+flutter run -d <device-id>                        # from app-ui/
+```
+
+**Android phone:** Settings → About phone → tap *Build number* seven times, then Settings → System → Developer options → *USB debugging* on. Connect by USB, accept the "Allow USB debugging?" prompt on the phone, and check that it appears in `adb devices` and `flutter devices`.
+
 ## Listen
 
 ```bash
