@@ -52,9 +52,9 @@ class _NarrowLayout extends StatelessWidget {
                 const SizedBox(height: 20),
                 _ColorBlock(c, wide: false),
                 const SizedBox(height: 18),
-                _VolumeBlock(c),
-                const SizedBox(height: 18),
                 _BinauralBlock(c),
+                const SizedBox(height: 18),
+                _BoomBlock(c),
                 const SizedBox(height: 18),
                 _LengthBlock(c, wide: false),
                 const SizedBox(height: 24),
@@ -85,9 +85,9 @@ class _WideLayout extends StatelessWidget {
             gap,
             Expanded(flex: 5, child: _ColorBlock(c, wide: true)),
             gap,
-            Expanded(flex: 4, child: _VolumeBlock(c)),
-            gap,
             Expanded(flex: 4, child: _BinauralBlock(c)),
+            gap,
+            Expanded(flex: 4, child: _BoomBlock(c)),
             gap,
             Expanded(flex: 5, child: _LengthBlock(c, wide: true)),
             gap,
@@ -190,45 +190,6 @@ class _ColorBlock extends StatelessWidget {
   );
 }
 
-class _VolumeBlock extends StatelessWidget {
-  const _VolumeBlock(this.c);
-  final SessionController c;
-
-  @override
-  Widget build(BuildContext context) {
-    final percent = c.settings.volumePercent;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            const Flexible(child: BlockLabel('VOLUME')),
-            const Spacer(),
-            ExcludeSemantics(child: Text('$percent%', style: SessionText.tabular)),
-          ],
-        ),
-        SizedBox(
-          height: 48,
-          child: MergeSemantics(
-            child: Semantics(
-              label: 'Volume',
-              child: Slider(
-                value: percent.toDouble(),
-                min: 0,
-                max: 100,
-                divisions: 100,
-                semanticFormatterCallback: (v) => '${v.round()}%',
-                onChanged: (v) => c.setVolume(v.round()),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _BinauralBlock extends StatelessWidget {
   const _BinauralBlock(this.c);
   final SessionController c;
@@ -261,8 +222,43 @@ class _BinauralBlock extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Text('Best with headphones', style: SessionText.weight(13, 400, color: SessionColors.secondary)),
+      ],
+    );
+  }
+}
+
+class _BoomBlock extends StatelessWidget {
+  const _BoomBlock(this.c);
+  final SessionController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = c.settings.boomOn;
+    final seconds = c.settings.boomSeconds;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const BlockLabel('BOOM'),
+        const SizedBox(height: 8),
+        CellGrid(
+          columns: 2,
+          children: [
+            ChoiceButton(
+              label: on ? 'On' : 'Off',
+              semanticLabel: 'Boom',
+              selected: on,
+              onPressed: () => c.setBoom(!on),
+            ),
+            ChoiceButton(
+              label: '$seconds s',
+              semanticLabel: 'Boom rate, $seconds seconds. Change.',
+              selected: false,
+              toggle: false,
+              onPressed: c.nextBoom,
+            ),
+          ],
+        ),
       ],
     );
   }

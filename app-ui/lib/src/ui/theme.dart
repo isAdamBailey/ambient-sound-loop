@@ -52,13 +52,6 @@ ThemeData sessionTheme() {
     colorScheme: scheme,
     scaffoldBackgroundColor: SessionColors.background,
     fontFamily: 'Inter',
-    sliderTheme: const SliderThemeData(
-      activeTrackColor: SessionColors.primary,
-      inactiveTrackColor: SessionColors.border,
-      thumbColor: SessionColors.primary,
-      overlayColor: Color(0x338FB3D9),
-      showValueIndicator: ShowValueIndicator.never,
-    ),
     textSelectionTheme: const TextSelectionThemeData(cursorColor: SessionColors.primary),
     focusColor: const Color(0x338FB3D9),
   );

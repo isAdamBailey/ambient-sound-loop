@@ -11,61 +11,72 @@ import 'length.dart';
 /// Beat frequencies offered by the binaural chip, in Hz.
 const beatFrequencies = <int>[2, 4, 6, 8, 10];
 
+/// Seconds between boom strikes, slowest first.
+const boomIntervals = <int>[8, 4, 2];
+
 @immutable
 class SessionSettings {
   const SessionSettings({
     required this.color,
-    required this.volumePercent,
     required this.length,
     required this.binauralOn,
     required this.beatHz,
+    required this.boomOn,
+    required this.boomSeconds,
   });
 
-  /// Pink, 30% volume, 8 h, binaural off; the beat starts at 4 Hz.
+  /// Pink, 8 h, binaural off, boom off. The beat starts at 4 Hz and the boom
+  /// at 8 s. Loudness is the device volume.
   static const firstLaunch = SessionSettings(
     color: NoiseColor.pink,
-    volumePercent: 30,
     length: TimedLength(Duration(hours: 8)),
     binauralOn: false,
     beatHz: 4,
+    boomOn: false,
+    boomSeconds: 8,
   );
 
   final NoiseColor color;
-  final int volumePercent; // 0–100
   final SessionLength length;
   final bool binauralOn;
   final int beatHz; // one of [beatFrequencies]
+  final bool boomOn;
+  final int boomSeconds; // one of [boomIntervals]
 
   SessionSettings copyWith({
     NoiseColor? color,
-    int? volumePercent,
     SessionLength? length,
     bool? binauralOn,
     int? beatHz,
+    bool? boomOn,
+    int? boomSeconds,
   }) => SessionSettings(
     color: color ?? this.color,
-    volumePercent: volumePercent ?? this.volumePercent,
     length: length ?? this.length,
     binauralOn: binauralOn ?? this.binauralOn,
     beatHz: beatHz ?? this.beatHz,
+    boomOn: boomOn ?? this.boomOn,
+    boomSeconds: boomSeconds ?? this.boomSeconds,
   );
 
   @override
   bool operator ==(Object other) =>
       other is SessionSettings &&
       other.color == color &&
-      other.volumePercent == volumePercent &&
       other.length == length &&
       other.binauralOn == binauralOn &&
-      other.beatHz == beatHz;
+      other.beatHz == beatHz &&
+      other.boomOn == boomOn &&
+      other.boomSeconds == boomSeconds;
 
   @override
-  int get hashCode => Object.hash(color, volumePercent, length, binauralOn, beatHz);
+  int get hashCode => Object.hash(color, length, binauralOn, beatHz, boomOn, boomSeconds);
 
   @override
   String toString() =>
-      'SessionSettings(${color.name}, $volumePercent%, ${length.tileText}, '
-      'binaural ${binauralOn ? 'on' : 'off'} $beatHz Hz)';
+      'SessionSettings(${color.name}, ${length.tileText}, '
+      'binaural ${binauralOn ? 'on' : 'off'} $beatHz Hz, '
+      'boom ${boomOn ? 'on' : 'off'} ${boomSeconds}s)';
 }
 
 /// Reads and writes [SessionSettings] in the platform's preferences store.
@@ -76,22 +87,23 @@ class SettingsStore {
   final SharedPreferencesAsync _prefs;
 
   static const _color = 'color';
-  static const _volume = 'volume';
   static const _lengthSeconds = 'lengthSeconds'; // 0 = Until I stop
   static const _binaural = 'binauralOn';
   static const _beat = 'beatHz';
+  static const _boom = 'boomOn';
+  static const _boomSeconds = 'boomSeconds';
 
   Future<SessionSettings> load() async {
     const d = SessionSettings.firstLaunch;
     final colorName = await _prefs.getString(_color);
-    final volume = await _prefs.getInt(_volume);
     final seconds = await _prefs.getInt(_lengthSeconds);
     final binaural = await _prefs.getBool(_binaural);
     final beat = await _prefs.getInt(_beat);
+    final boom = await _prefs.getBool(_boom);
+    final boomSeconds = await _prefs.getInt(_boomSeconds);
 
     return SessionSettings(
       color: NoiseColor.values.where((c) => c.name == colorName).firstOrNull ?? d.color,
-      volumePercent: volume != null && volume >= 0 && volume <= 100 ? volume : d.volumePercent,
       length: switch (seconds) {
         0 => SessionLength.untilStop,
         final int s when s > 0 => SessionLength.timed(Duration(seconds: s)),
@@ -99,14 +111,17 @@ class SettingsStore {
       },
       binauralOn: binaural ?? d.binauralOn,
       beatHz: beatFrequencies.contains(beat) ? beat! : d.beatHz,
+      boomOn: boom ?? d.boomOn,
+      boomSeconds: boomIntervals.contains(boomSeconds) ? boomSeconds! : d.boomSeconds,
     );
   }
 
   Future<void> save(SessionSettings settings) async {
     await _prefs.setString(_color, settings.color.name);
-    await _prefs.setInt(_volume, settings.volumePercent);
     await _prefs.setInt(_lengthSeconds, settings.length.duration?.inSeconds ?? 0);
     await _prefs.setBool(_binaural, settings.binauralOn);
     await _prefs.setInt(_beat, settings.beatHz);
+    await _prefs.setBool(_boom, settings.boomOn);
+    await _prefs.setInt(_boomSeconds, settings.boomSeconds);
   }
 }

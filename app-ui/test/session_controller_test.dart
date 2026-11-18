@@ -31,7 +31,8 @@ void main() {
   test('opens stopped on the restored settings and applies them to the engine', () {
     final c = make(settings: SessionSettings.firstLaunch.copyWith(color: NoiseColor.brown));
     expect(c.phase, SessionPhase.stopped);
-    expect(audio.calls, containsAll(['color brown', 'volume 0.3', 'binaural false', 'beat 4.0']));
+    expect(audio.calls, containsAll(
+        ['color brown', 'volume 1.0', 'binaural false', 'beat 4.0', 'boom false', 'boom-interval 8.0']));
     expect(audio.calls.where((s) => s.startsWith('start') || s == 'open'), isEmpty,
         reason: 'never plays sound on launch');
   });
@@ -157,17 +158,16 @@ void main() {
     });
   });
 
-  test('color, volume and binaural apply at once, also mid-session, and are saved', () {
+  test('color and binaural apply at once, also mid-session, and are saved', () {
     final c = make();
     c.playOrStop();
     audio.calls.clear();
     c.setColor(NoiseColor.white);
-    c.setVolume(55);
     c.setBinaural(true);
     c.nextBeat();
-    expect(audio.calls, ['color white', 'volume 0.55', 'binaural true', 'beat 6.0']);
+    expect(audio.calls, ['color white', 'binaural true', 'beat 6.0']);
     expect(saved.last, SessionSettings.firstLaunch.copyWith(
-        color: NoiseColor.white, volumePercent: 55, binauralOn: true, beatHz: 6));
+        color: NoiseColor.white, binauralOn: true, beatHz: 6));
     c.dispose();
   });
 
@@ -179,6 +179,25 @@ void main() {
       seen.add(c.settings.beatHz);
     }
     expect(seen, [6, 8, 10, 2, 4]);
+  });
+
+  test('the boom chip cycles 8, 4, 2 seconds and can be switched off', () {
+    final c = make();
+    c.setBoom(true);
+    expect(c.settings.boomOn, isTrue);
+    expect(audio.calls, contains('boom true'));
+    final seen = <int>[];
+    for (var i = 0; i < 3; i++) {
+      c.nextBoom();
+      seen.add(c.settings.boomSeconds);
+    }
+    expect(seen, [4, 2, 8]);
+    expect(c.soundName, 'Pink noise · boom');
+    c.setBinaural(true);
+    expect(c.soundName, 'Pink noise · 4 Hz beat · boom');
+    c.setBoom(false);
+    expect(c.soundName, 'Pink noise · 4 Hz beat');
+    c.dispose();
   });
 
   group('headphones out', () {
@@ -290,22 +309,36 @@ void main() {
         audio.beginSession(remaining: 100);
         async.elapse(tick);
 
-        // Headphones in: Android stopped the stream; it comes back.
-        audio.running = false;
-        audio.events |= PlayerEvent.rerouted;
-        audio.calls.clear();
-        async.elapse(tick);
-        expect(audio.calls, ['open']);
-
-        // Headphones out: paused first, so the speaker stays silent.
-        c.routeLost();
+        // Headphones in: Android stopped the stream; it comes back after the
+        // wait, so a headphones-out report in that window can cancel it.
         audio.running = false;
         audio.events |= PlayerEvent.rerouted;
         audio.calls.clear();
         async.elapse(tick);
         expect(audio.calls, isEmpty);
+        async.elapse(SessionController.rerouteRestartGrace);
+        expect(audio.calls, ['open']);
 
-        // Play reopens the stream and resumes.
+        // Headphones out reported before the reroute: the speaker stays silent.
+        c.routeLost();
+        audio.running = false;
+        audio.events |= PlayerEvent.rerouted;
+        audio.calls.clear();
+        async.elapse(tick + SessionController.rerouteRestartGrace);
+        expect(audio.calls, isEmpty);
+
+        // And when the reroute is seen first: the pending restart is dropped.
+        c.playOrStop();
+        audio.running = false;
+        audio.events |= PlayerEvent.rerouted;
+        audio.calls.clear();
+        async.elapse(tick);
+        c.routeLost();
+        async.elapse(SessionController.rerouteRestartGrace);
+        expect(audio.calls.where((s) => s == 'open'), isEmpty);
+        expect(c.phase, SessionPhase.paused);
+
+        audio.calls.clear();
         c.playOrStop();
         expect(audio.calls, ['open', 'resume 5.0']);
         c.dispose();
@@ -332,6 +365,23 @@ void main() {
       c.focusLost(FocusLoss.canDuck);
       expect(audio.calls.last, 'duck 0.3');
       c.dispose();
+    });
+
+    test('an engine interruption ducks, and the end of it restores the level', () {
+      fakeAsync((async) {
+        final c = make();
+        c.playOrStop();
+        audio.beginSession(remaining: 100);
+        audio.calls.clear();
+        audio.events |= PlayerEvent.interruptionBegan;
+        async.elapse(tick);
+        expect(audio.calls, ['duck 0.0']);
+        expect(c.phase, SessionPhase.playing);
+        audio.events |= PlayerEvent.interruptionEnded;
+        async.elapse(tick);
+        expect(audio.calls.last, 'duck 1.0');
+        c.dispose();
+      });
     });
 
     test('another app taking over media ends the session', () {

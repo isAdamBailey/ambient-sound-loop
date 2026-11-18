@@ -4,16 +4,19 @@ An ambient and sleep sound app that plays for **any** duration — minutes to da
 
 See [`docs/PLAN.md`](docs/PLAN.md) for the full design and roadmap.
 
-## Status: Phase 1 (procedural core + desktop harness)
+## Status
+
+The procedural engine and `ambient_play` listening harness are in place, including pause/resume, interruption ducking and a normalised binaural layer. The session screen (`app-ui/`, issue #10) is the app: one Flutter screen on desktop, iOS and Android, with restore and system now-playing. Lock-screen controls, unplugging headphones, a phone call, and a full `1h 37m` session still need a pass on a phone.
 
 | Done | Not yet |
 | --- | --- |
-| White / pink / brown noise (xoshiro256\*\*, Kellet pink filter, leaky-integrator brown), decorrelated stereo, all colours level-matched | Harmonic drones, binaural / isochronic tones |
-| Click-free colour and volume changes (one-pole smoothing) | Recorded stems (Engine B), seam matcher, granular |
-| Session timer kept in rendered audio time, frame-accurate, survives sample-rate changes | Mobile platform layers, UI |
-| S-curve fade-in, squared raised-cosine fade-out ending in true silence, stop-with-fade | A true look-ahead limiter (a soft clipper above −2 dBFS guards the output for now) |
+| White / pink / brown noise (xoshiro256\*\*, Kellet pink filter, leaky-integrator brown), decorrelated stereo. White and pink share a level; brown is 9 dB above that so it matches by ear and stays clean on a phone speaker | Harmonic drones, isochronic tones |
+| Click-free colour changes (one-pole smoothing); binaural beat, on/off and 2–10 Hz; optional boom, alternating ears at 8 / 4 / 2 s | Recorded stems (Engine B), seam matcher, granular |
+| Session timer kept in rendered audio time, frame-accurate, survives sample-rate changes; pause/resume keeps it | A true look-ahead limiter (a soft clipper above −2 dBFS guards the output for now) |
+| S-curve fade-in, squared raised-cosine fade-out ending in true silence, stop-with-fade, fades that shrink to fit | |
 | Lock-free SPSC command queue, atomics for parameters, FTZ/DAZ on the render thread, zero allocations while rendering | |
 | `ambient_play` desktop player (miniaudio) | |
+| Session screen app: screen, session logic, native output stream, now-playing | Device checks in issue #10 §4 |
 
 ## Layout
 
@@ -24,6 +27,8 @@ core-cpp/                 libambientsynth (C++20)
   src/engine/               engine, SPSC queue, denormal guard
   tests/                    unit tests (ctest)
 platform-audio/desktop/   ambient_play: miniaudio harness for listening tests
+platform-audio/player/    the app's output stream (engine + miniaudio)
+app-ui/                   the session screen (Flutter)
 docs/PLAN.md              design and roadmap
 ```
 
@@ -56,8 +61,11 @@ flutter doctor
 flutter emulators --launch ambient_phone          # Android emulator
 xcrun simctl boot "iPhone 18 Pro" && open -a Simulator
 flutter devices
-flutter run -d <device-id>                        # from app-ui/
+cd app-ui && flutter test
+cd app-ui && flutter run -d <device-id>
 ```
+
+The desktop window is titled Ambient Lucidity and will not shrink below 360×640. Loudness is the device volume; the screen has no volume control. On a phone, playback shows a media notification titled Ambient Lucidity; unplugging headphones should pause with no sound from the speaker.
 
 **Android phone:** Settings → About phone → tap *Build number* seven times, then Settings → System → Developer options → *USB debugging* on. Connect by USB, accept the "Allow USB debugging?" prompt on the phone, and check that it appears in `adb devices` and `flutter devices`.
 

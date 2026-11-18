@@ -73,6 +73,9 @@ void main(List<String> args) async {
         if (apple) 'MA_NO_RUNTIME_LINKING': null,
       },
       flags: [if (os == OS.windows) '/EHsc'],
+      // Android's default c++_shared needs libc++_shared.so, which is not in
+      // the apk. The C ABI never passes C++ objects out of this library.
+      cppLinkStdLib: os == OS.android ? 'c++_static' : null,
     );
     await builder.run(input: input, output: output, logger: logger);
   });

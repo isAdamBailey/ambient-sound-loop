@@ -20,6 +20,10 @@ class FakeAudio implements AudioPort {
   @override
   void setBeatFrequency(double hz) => calls.add('beat $hz');
   @override
+  void setBoom(bool enabled) => calls.add('boom $enabled');
+  @override
+  void setBoomInterval(double seconds) => calls.add('boom-interval $seconds');
+  @override
   bool start({required double duration, required double fadeIn, required double fadeOut}) {
     calls.add('start $duration $fadeIn $fadeOut');
     return true;

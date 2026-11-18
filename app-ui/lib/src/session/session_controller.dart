@@ -59,9 +59,11 @@ class SessionController extends ChangeNotifier {
        _settings = settings {
     _audio
       ..setColor(settings.color)
-      ..setVolume(settings.volumePercent / 100)
+      ..setVolume(1)
       ..setBinaural(settings.binauralOn)
-      ..setBeatFrequency(settings.beatHz.toDouble());
+      ..setBeatFrequency(settings.beatHz.toDouble())
+      ..setBoom(settings.boomOn)
+      ..setBoomInterval(settings.boomSeconds.toDouble());
   }
 
   static const fadeIn = 5.0;
@@ -78,6 +80,11 @@ class SessionController extends ChangeNotifier {
   /// is not fixed.
   static const systemPauseGrace = Duration(milliseconds: 300);
 
+  /// Android stops the stream on any reroute. Headphones-in should open it
+  /// again; headphones-out arrives as its own report and must win, so the
+  /// restart waits.
+  static const rerouteRestartGrace = systemPauseGrace;
+
   final AudioPort _audio;
   final RerouteBehavior reroute;
   final void Function(SessionSettings) onSettingsChanged;
@@ -88,6 +95,7 @@ class SessionController extends ChangeNotifier {
   bool _sawPlaying = false; // the audio thread has picked up the start
   Timer? _ticker;
   Timer? _pendingSystemPause;
+  Timer? _pendingRestart;
 
   SessionSettings get settings => _settings;
   SessionPhase get phase => _phase;
@@ -126,7 +134,10 @@ class SessionController extends ChangeNotifier {
       NoiseColor.pink => 'Pink',
       NoiseColor.brown => 'Brown',
     };
-    return _settings.binauralOn ? '$color noise · ${_settings.beatHz} Hz beat' : '$color noise';
+    final parts = <String>['$color noise'];
+    if (_settings.binauralOn) parts.add('${_settings.beatHz} Hz beat');
+    if (_settings.boomOn) parts.add('boom');
+    return parts.join(' · ');
   }
 
   /// The running timed session's length, for the now-playing progress bar.
@@ -143,6 +154,7 @@ class SessionController extends ChangeNotifier {
   void playOrStop() => _phase == SessionPhase.playing ? stop() : play();
 
   void play() {
+    _pendingRestart?.cancel();
     switch (_phase) {
       case SessionPhase.playing:
         return;
@@ -169,6 +181,7 @@ class SessionController extends ChangeNotifier {
   void stop() {
     if (_phase == SessionPhase.stopped) return;
     _pendingSystemPause?.cancel();
+    _pendingRestart?.cancel();
     _audio.stop(fade: stopFade);
     _phase = SessionPhase.stopped;
     _ensureTicking(); // closes the stream once the fade has finished
@@ -179,6 +192,7 @@ class SessionController extends ChangeNotifier {
 
   /// Headphones or Bluetooth went away.
   void routeLost() {
+    _pendingRestart?.cancel();
     if (_phase != SessionPhase.playing) return;
     _audio.pause(fade: pauseFade);
     _phase = SessionPhase.paused;
@@ -219,12 +233,6 @@ class SessionController extends ChangeNotifier {
     _update(_settings.copyWith(color: color));
   }
 
-  void setVolume(int percent) {
-    final p = percent.clamp(0, 100);
-    _audio.setVolume(p / 100);
-    _update(_settings.copyWith(volumePercent: p));
-  }
-
   void setBinaural(bool on) {
     _audio.setBinaural(on);
     _update(_settings.copyWith(binauralOn: on));
@@ -236,6 +244,19 @@ class SessionController extends ChangeNotifier {
     final hz = beatFrequencies[(i + 1) % beatFrequencies.length];
     _audio.setBeatFrequency(hz.toDouble());
     _update(_settings.copyWith(beatHz: hz));
+  }
+
+  void setBoom(bool on) {
+    _audio.setBoom(on);
+    _update(_settings.copyWith(boomOn: on));
+  }
+
+  /// The boom chip: the next gap in [boomIntervals], wrapping.
+  void nextBoom() {
+    final i = boomIntervals.indexOf(_settings.boomSeconds);
+    final seconds = boomIntervals[(i + 1) % boomIntervals.length];
+    _audio.setBoomInterval(seconds.toDouble());
+    _update(_settings.copyWith(boomSeconds: seconds));
   }
 
   /// Takes effect at the next session.
@@ -258,9 +279,12 @@ class SessionController extends ChangeNotifier {
     if (playing) _sawPlaying = true;
     final finished = (events & PlayerEvent.finished) != 0 || (_sawPlaying && !playing);
 
+    if ((events & PlayerEvent.interruptionBegan) != 0) focusLost(FocusLoss.transient);
+    if ((events & PlayerEvent.interruptionEnded) != 0) focusGained();
     if ((events & PlayerEvent.rerouted) != 0) _onRerouted();
 
     if (finished) {
+      _pendingRestart?.cancel();
       _audio.closeStream();
       _sawPlaying = false;
       if (_phase != SessionPhase.stopped) {
@@ -281,7 +305,13 @@ class SessionController extends ChangeNotifier {
       case RerouteBehavior.pauseSession:
         routeLost();
       case RerouteBehavior.restartStream:
-        if (_phase == SessionPhase.playing && !_audio.isStreamRunning) _audio.openStream();
+        _pendingRestart?.cancel();
+        if (_phase == SessionPhase.playing && !_audio.isStreamRunning) {
+          _pendingRestart = Timer(rerouteRestartGrace, () {
+            _pendingRestart = null;
+            if (_phase == SessionPhase.playing && !_audio.isStreamRunning) _audio.openStream();
+          });
+        }
       case RerouteBehavior.ignore:
         break;
     }
@@ -291,6 +321,7 @@ class SessionController extends ChangeNotifier {
   void dispose() {
     _ticker?.cancel();
     _pendingSystemPause?.cancel();
+    _pendingRestart?.cancel();
     super.dispose();
   }
 }

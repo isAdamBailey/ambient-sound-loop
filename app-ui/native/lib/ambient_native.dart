@@ -40,6 +40,9 @@ final class NativeEngine {
       c.ambient_engine_set_binaural(_ptr, enabled ? 1 : 0);
   void setBeatFrequency(double hz) =>
       c.ambient_engine_set_beat_frequency(_ptr, hz);
+  void setBoom(bool enabled) => c.ambient_engine_set_boom(_ptr, enabled ? 1 : 0);
+  void setBoomInterval(double seconds) =>
+      c.ambient_engine_set_boom_interval(_ptr, seconds);
 
   /// [duration] <= 0 plays until stopped. False if the command queue is full.
   bool start({

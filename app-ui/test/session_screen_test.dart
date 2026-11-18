@@ -36,7 +36,7 @@ void main() {
   group('layout', () {
     testWidgets('under 900 px the blocks stack top to bottom', (tester) async {
       await pumpScreen(tester, const Size(390, 844));
-      final ys = ['8:00:00', 'COLOR', 'VOLUME', 'BINAURAL BEAT', 'LENGTH']
+      final ys = ['8:00:00', 'COLOR', 'BINAURAL BEAT', 'BOOM', 'LENGTH']
           .map((t) => centerOf(tester, t).dy)
           .toList();
       expect(ys, orderedEquals([...ys]..sort()));
@@ -48,7 +48,7 @@ void main() {
 
     testWidgets('at 900 px and up the same blocks sit in one row, left to right', (tester) async {
       await pumpScreen(tester, const Size(900, 640));
-      final xs = ['8:00:00', 'COLOR', 'VOLUME', 'BINAURAL BEAT', 'LENGTH']
+      final xs = ['8:00:00', 'COLOR', 'BINAURAL BEAT', 'BOOM', 'LENGTH']
           .map((t) => centerOf(tester, t).dx)
           .toList();
       expect(xs, orderedEquals([...xs]..sort()));
@@ -58,11 +58,11 @@ void main() {
 
     testWidgets('switches when the window is resized across 900 px', (tester) async {
       await pumpScreen(tester, const Size(1200, 700));
-      expect(centerOf(tester, 'COLOR').dx, lessThan(centerOf(tester, 'VOLUME').dx));
-      expect(centerOf(tester, 'COLOR').dy, closeTo(centerOf(tester, 'VOLUME').dy, 40));
+      expect(centerOf(tester, 'COLOR').dx, lessThan(centerOf(tester, 'BINAURAL BEAT').dx));
+      expect(centerOf(tester, 'COLOR').dy, closeTo(centerOf(tester, 'BINAURAL BEAT').dy, 40));
       tester.view.physicalSize = const Size(899, 700);
       await tester.pump();
-      expect(centerOf(tester, 'COLOR').dy, lessThan(centerOf(tester, 'VOLUME').dy));
+      expect(centerOf(tester, 'COLOR').dy, lessThan(centerOf(tester, 'BINAURAL BEAT').dy));
     });
 
     testWidgets('the minimum desktop window and a landscape phone do not overflow', (tester) async {
@@ -87,31 +87,35 @@ void main() {
       semantics.dispose();
     });
 
-    testWidgets('volume is a labelled slider with a % readout', (tester) async {
-      final semantics = tester.ensureSemantics();
-      await pumpScreen(tester, const Size(390, 844));
-      expect(find.text('30%'), findsOneWidget);
-      expect(find.bySemanticsLabel('Volume'), findsOneWidget);
-      expect(tester.getSemantics(find.byType(Slider)), isSemantics(isSlider: true, value: '30%'));
-      await tester.drag(find.byType(Slider), const Offset(400, 0));
-      await tester.pump();
-      expect(controller.settings.volumePercent, 100);
-      expect(find.text('100%'), findsOneWidget);
-      semantics.dispose();
-    });
-
     testWidgets('binaural toggle and beat chip', (tester) async {
       final semantics = tester.ensureSemantics();
       await pumpScreen(tester, const Size(390, 844));
-      expect(find.text('Best with headphones'), findsOneWidget);
-      expect(tester.getSemantics(find.text('Off')), isSemantics(isButton: true, isToggled: false));
-      await tester.tap(find.text('Off'));
+      expect(tester.getSemantics(find.bySemanticsLabel('Binaural beat')),
+          isSemantics(isButton: true, isToggled: false));
+      await tester.tap(find.bySemanticsLabel('Binaural beat'));
       await tester.pump();
       expect(controller.settings.binauralOn, isTrue);
-      expect(tester.getSemantics(find.text('On')), isSemantics(isButton: true, isToggled: true));
+      expect(tester.getSemantics(find.bySemanticsLabel('Binaural beat')),
+          isSemantics(isButton: true, isToggled: true));
       await tester.tap(find.text('4 Hz'));
       await tester.pump();
       expect(find.text('6 Hz'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('boom toggles without touching the binaural beat, and its rate chip cycles', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpScreen(tester, const Size(390, 844));
+      expect(tester.getSemantics(find.bySemanticsLabel('Boom')), isSemantics(isButton: true, isToggled: false));
+      await tester.tap(find.bySemanticsLabel('Boom'));
+      await tester.pump();
+      expect(controller.settings.boomOn, isTrue);
+      expect(controller.settings.binauralOn, isFalse);
+      expect(tester.getSemantics(find.bySemanticsLabel('Boom')), isSemantics(isButton: true, isToggled: true));
+      await tester.tap(find.bySemanticsLabel('Boom rate, 8 seconds. Change.'));
+      await tester.pump();
+      expect(controller.settings.boomSeconds, 4);
+      expect(find.text('4 s'), findsOneWidget);
       semantics.dispose();
     });
 
@@ -143,7 +147,7 @@ void main() {
 
     testWidgets('touch targets are at least 44 px', (tester) async {
       await pumpScreen(tester, const Size(360, 640));
-      for (final label in ['White', 'Pink', 'Brown', 'Off', '4 Hz']) {
+      for (final label in ['White', 'Pink', 'Brown', 'Off', '4 Hz', '8 s']) {
         final size = tester.getSize(find.ancestor(of: find.text(label), matching: find.byType(TextButton)).first);
         expect(size.height, greaterThanOrEqualTo(44), reason: label);
         expect(size.width, greaterThanOrEqualTo(44), reason: label);

@@ -100,6 +100,23 @@ external void ambient_engine_set_binaural(
   int enabled,
 );
 
+/// A low resonant boom that strikes left, then right, then left. It follows
+/// the session volume and envelope, and it is independent of the binaural
+/// beat. `seconds` is the gap between strikes, clamped to [1, 16]. Off by
+/// default, gap 8 s. Switching it on strikes at once; switching it off fades.
+/// Control thread (atomics).
+@ffi.Native<ffi.Void Function(ffi.Pointer<ambient_engine>, ffi.Int)>()
+external void ambient_engine_set_boom(
+  ffi.Pointer<ambient_engine> engine,
+  int enabled,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<ambient_engine>, ffi.Float)>()
+external void ambient_engine_set_boom_interval(
+  ffi.Pointer<ambient_engine> engine,
+  double seconds,
+);
+
 /// Duck the output for a phone call or system interruption: a gain in [0, 1]
 /// (1 = no duck) on top of the volume, smoothed so it settles in about 500 ms.
 /// The session and its timer carry on. Control thread (atomic).

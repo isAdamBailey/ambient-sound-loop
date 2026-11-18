@@ -46,10 +46,10 @@ private:
     uint64_t s_[4]{};
 };
 
-// Target RMS for every color, so switching colors keeps roughly the same
-// loudness (about -15 dBFS RMS before volume, leaving headroom for the peaks
-// of pink and brown noise, which reach 4-5x RMS).
-inline constexpr float kNoiseRms = 0.18f;
+// White, pink, and the binaural tone. 8 dB under the old 0.18 reference so
+// they match brown by ear: equal RMS leaves brown much quieter, because its
+// energy is in the bass. Device volume is the loudness control.
+inline constexpr float kNoiseRms = 0.07165929f;
 
 // Uniform white noise has RMS 1/sqrt(3).
 inline constexpr float kWhiteGain = kNoiseRms * 1.7320508f;
@@ -80,20 +80,26 @@ private:
 };
 
 // Brown (red) noise: leaky integrator y[n] = a*y[n-1] + (1-a)*x[n].
-// -6 dB/octave above the corner frequency, flat below it (so no DC drift).
+// −6 dB/octave above the corner, flat below it (so no DC drift).
+// The corner sits at 30 Hz so the level does not wander in and out.
 // Normalised analytically: var(y) = var(x) * (1-a)/(1+a).
 class BrownFilter {
 public:
-    explicit BrownFilter(double sampleRate = 48000.0, double cornerHz = 8.0) noexcept {
+    static constexpr double kCornerHz = 30.0;
+    // 9 dB above white and pink, so the bass matches them by ear, and low
+    // enough that the waveform stays clean on a phone speaker.
+    static constexpr double kOpenRms = 0.20;
+
+    explicit BrownFilter(double sampleRate = 48000.0, double cornerHz = kCornerHz) noexcept {
         setSampleRate(sampleRate, cornerHz);
     }
 
-    void setSampleRate(double sampleRate, double cornerHz = 8.0) noexcept {
+    void setSampleRate(double sampleRate, double cornerHz = kCornerHz) noexcept {
         const double a = std::exp(-2.0 * std::numbers::pi * cornerHz / sampleRate);
         a_ = static_cast<float>(a);
         oneMinusA_ = static_cast<float>(1.0 - a);
         const double rmsIn = 1.0 / std::sqrt(3.0);
-        gain_ = static_cast<float>(kNoiseRms / (rmsIn * std::sqrt((1.0 - a) / (1.0 + a))));
+        gain_ = static_cast<float>(kOpenRms / (rmsIn * std::sqrt((1.0 - a) / (1.0 + a))));
     }
 
     float process(float white) noexcept {

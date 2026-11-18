@@ -1,5 +1,118 @@
 package dev.ambientsoundloop.ambient_app
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity()
+class MainActivity : FlutterActivity() {
+    private var channel: MethodChannel? = null
+    private var listening = false
+    private var noisyRegistered = false
+    private var focusRequest: AudioFocusRequest? = null
+
+    private val audioManager by lazy { getSystemService(AUDIO_SERVICE) as AudioManager }
+
+    private val noisyReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+                channel?.invokeMethod("outputLost", null)
+            }
+        }
+    }
+
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        val method = when (change) {
+            AudioManager.AUDIOFOCUS_LOSS -> "focusLoss"
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "focusTransient"
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> "focusDuck"
+            AudioManager.AUDIOFOCUS_GAIN -> "focusGain"
+            else -> return@OnAudioFocusChangeListener
+        }
+        channel?.invokeMethod(method, null)
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
+        channel = MethodChannel(messenger, "dev.ambientsoundloop/session")
+        channel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setListening" -> {
+                    if (call.arguments == true) startListening() else stopListening()
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        stopListening()
+        channel?.setMethodCallHandler(null)
+        super.onDestroy()
+    }
+
+    private fun startListening() {
+        if (listening) return
+        listening = true
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(noisyReceiver, filter)
+        }
+        noisyRegistered = true
+        requestFocus()
+    }
+
+    private fun stopListening() {
+        if (noisyRegistered) {
+            unregisterReceiver(noisyReceiver)
+            noisyRegistered = false
+        }
+        abandonFocus()
+        listening = false
+    }
+
+    private fun requestFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build(),
+                )
+                .setOnAudioFocusChangeListener(focusListener)
+                .setWillPauseWhenDucked(false)
+                .build()
+                .also { focusRequest = it }
+            audioManager.requestAudioFocus(request)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                focusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN,
+            )
+        }
+    }
+
+    private fun abandonFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(focusListener)
+        }
+    }
+}

@@ -11,5 +11,7 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     super.awakeFromNib()
+    title = "Ambient Lucidity"
+    minSize = NSSize(width: 360, height: 640)
   }
 }

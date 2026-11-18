@@ -7,10 +7,12 @@ import 'package:ambient_native/ambient_native.dart';
 
 abstract interface class AudioPort {
   void setColor(NoiseColor color);
-  void setVolume(double volume); // 0–1
+  void setVolume(double volume); // engine gain, full scale in the app; the device volume is the control
   void setDuckGain(double gain); // 0–1, 1 = no duck
   void setBinaural(bool enabled);
   void setBeatFrequency(double hz);
+  void setBoom(bool enabled);
+  void setBoomInterval(double seconds);
 
   bool start({required double duration, required double fadeIn, required double fadeOut});
   bool stop({required double fade});
@@ -47,6 +49,10 @@ final class FfiAudioPort implements AudioPort {
   void setBinaural(bool enabled) => _engine.setBinaural(enabled);
   @override
   void setBeatFrequency(double hz) => _engine.setBeatFrequency(hz);
+  @override
+  void setBoom(bool enabled) => _engine.setBoom(enabled);
+  @override
+  void setBoomInterval(double seconds) => _engine.setBoomInterval(seconds);
 
   @override
   bool start({required double duration, required double fadeIn, required double fadeOut}) =>
