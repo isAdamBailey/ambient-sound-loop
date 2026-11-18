@@ -9,7 +9,11 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release   # add -DAMBIENT_BUILD_
 cmake --build build
 ctest --test-dir build --output-on-failure
 ./build/platform-audio/desktop/ambient_play --help
+flutter doctor                              # app toolchain: README "App dev environment"
+flutter emulators --launch ambient_phone    # Android emulator for this project
 ```
+
+Tool shells skip `~/.zshrc`, so run `flutter`, `adb`, `pod` and `emulator` through `zsh -i -c '…'`. `/usr/local/bin/brew` is an Intel build under Rosetta; install arm64 tools with `/opt/homebrew/bin/brew`.
 
 ## Rules
 
