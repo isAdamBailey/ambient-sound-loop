@@ -147,6 +147,7 @@ struct ambient_engine {
             paused = false;
             holdRamping = false;
             holdLevel = 1.0;
+            holdTarget = 1.0;
             elapsedBase = 0.0;
             segmentFrames = 0;
             duration = cmd.duration > 0.0 ? cmd.duration : 0.0;
@@ -201,7 +202,12 @@ struct ambient_engine {
         if (u >= 1.0) {
             holdRamping = false;
             holdLevel = holdTarget;
-            paused = holdTarget == 0.0;
+            if (holdTarget == 0.0) {
+                // Silent now. A stop that arrived mid-fade finishes here
+                // rather than pausing (its timer would never run out).
+                paused = !stopping;
+                active = !stopping;
+            }
         } else if (holdTarget == 0.0) {
             holdLevel = holdFrom * fadeOutCurve(u);
         } else {

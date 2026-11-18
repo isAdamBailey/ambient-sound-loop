@@ -6,7 +6,8 @@
  *     It never allocates, locks, does I/O or throws.
  *   - Every other function is called from one control (UI) thread. Parameter
  *     setters write atomics; start/stop go through a lock-free SPSC queue, so
- *     they are safe to call while the audio thread is rendering.
+ *     they are safe to call while the audio thread is rendering. Pause and
+ *     resume also go through the queue.
  *   - ambient_engine_create/destroy and ambient_engine_set_sample_rate must NOT
  *     run concurrently with render (call them while the stream is stopped,
  *     e.g. when the OS reopens the stream after a route change).

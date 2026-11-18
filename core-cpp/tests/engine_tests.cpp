@@ -288,6 +288,20 @@ static void testStopWhilePausedEndsAtOnce() {
           "stop from pause should finish in the next block");
 }
 
+static void testStopDuringPauseFadeFinishes() {
+    std::printf("stop during a pause fade still finishes\n");
+    Engine eng;
+    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    render(eng.e, kRate);
+    ambient_engine_pause(eng.e, 0.2);
+    render(eng.e, kRate / 10); // halfway through the pause fade
+    ambient_engine_stop(eng.e, 1.0);
+    const int64_t frames = renderUntilFinished(eng.e, kRate * 5);
+    CHECK(frames >= 0 && frames <= int64_t(1.0 * kRate) + kBlock, "session should end, took %lld frames",
+          (long long)frames);
+    CHECK(!ambient_engine_is_playing(eng.e) && !ambient_engine_is_paused(eng.e), "finished, not paused");
+}
+
 static void testDuckLowersLevelAndKeepsClock() {
     std::printf("duck lowers the level within 500 ms and keeps the clock\n");
     Engine eng;
@@ -453,8 +467,12 @@ static void testRenderDoesNotAllocate() {
         if (i == 900) ambient_engine_resume(eng.e, 1.0);
         if (i == 1200) ambient_engine_set_binaural(eng.e, 0);
         if (i == 1500) ambient_engine_stop(eng.e, 2.0);
-        if (i == 2500) ambient_engine_pause(eng.e, 0.1);
         if (i == 2000) ambient_engine_start(eng.e, 5.0, 1.0, 1.0);
+        if (i == 2100) ambient_engine_pause(eng.e, 0.2);
+        if (i == 2105) ambient_engine_stop(eng.e, 1.0); // stop mid pause fade
+        if (i == 2200) ambient_engine_start(eng.e, 5.0, 1.0, 1.0);
+        if (i == 2500) ambient_engine_pause(eng.e, 0.1);
+        if (i == 2700) ambient_engine_stop(eng.e, 1.0); // stop while paused
         ambient_engine_render(eng.e, block.data(), kBlock);
     }
     g_trackAllocations = false;
@@ -469,6 +487,7 @@ int main() {
     testRemainingSeconds();
     testPauseHoldsPlaceAndResumes();
     testStopWhilePausedEndsAtOnce();
+    testStopDuringPauseFadeFinishes();
     testDuckLowersLevelAndKeepsClock();
     testBinauralBeatToneAndLevel();
     testFadeOutEndsInSilence();
