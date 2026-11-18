@@ -6,7 +6,7 @@ See [`docs/PLAN.md`](docs/PLAN.md) for the full design and roadmap.
 
 ## Status
 
-The procedural engine and `ambient_play` listening harness are in place, including pause/resume, interruption ducking and a normalised binaural layer. The session screen (`app-ui/`, issue #10) is the app: one Flutter screen on desktop, iOS and Android, with restore and system now-playing. Lock-screen controls, unplugging headphones, a phone call, and a full `1h 37m` session still need a pass on a phone.
+The procedural engine and `ambient_play` listening harness are in place, including pause/resume, interruption ducking and a normalised binaural layer. The session screen (`app-ui/`, issue #10) is the app: one Flutter screen on desktop, iOS and Android, with restore and system now-playing. On an Android phone it has been checked for lock-screen controls, headphone unplug, a call duck, and a full `1h 37m` session.
 
 | Done | Not yet |
 | --- | --- |
@@ -16,7 +16,7 @@ The procedural engine and `ambient_play` listening harness are in place, includi
 | S-curve fade-in, squared raised-cosine fade-out ending in true silence, stop-with-fade, fades that shrink to fit | |
 | Lock-free SPSC command queue, atomics for parameters, FTZ/DAZ on the render thread, zero allocations while rendering | |
 | `ambient_play` desktop player (miniaudio) | |
-| Session screen app: screen, session logic, native output stream, now-playing | Device checks in issue #10 §4 |
+| Session screen app: screen, session logic, native output stream, now-playing, and the Android phone pass (lock screen, headphone unplug, call duck, `1h 37m`) | |
 
 ## Layout
 
