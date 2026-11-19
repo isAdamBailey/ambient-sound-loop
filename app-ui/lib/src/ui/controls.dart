@@ -193,12 +193,14 @@ class ValueStepper extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: SessionColors.rule, width: 1.5),
+              // Faded ink (5.4:1) when usable; the hairline once the end of
+              // the range disables it.
+              border: Border.all(color: onPressed == null ? SessionColors.rule : SessionColors.dim, width: 1.5),
             ),
             child: Icon(
               icon,
               size: 18,
-              color: onPressed == null ? SessionColors.rule : (muted ? SessionColors.dim : SessionColors.ink),
+              color: onPressed == null || muted ? SessionColors.dim : SessionColors.ink,
             ),
           ),
         ),

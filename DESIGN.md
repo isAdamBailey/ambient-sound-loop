@@ -153,8 +153,8 @@ A night palette: two warm inks on a cold near-black, with two accents that each 
 ### Neutral
 - **Night Ground** (`ground`): the screen, the off-switch track, the Play glyph and the dial handle's centre dot.
 - **Raised Night** (`raised`): the exact-length sheet and dialog, and their text fields. The only surface lighter than the ground.
-- **Faded Ink** (`dim`): secondary text (control names, notes, the "ends" line, percentages), headings and controls of a layer that is off, unchosen options, and the dial ring past 12 hours. About 5.4:1 on the ground.
-- **Hairline** (`rule`): rules between layer rows, slider and dial tracks, stepper rings, keypad and field outlines, sheet edges, the disabled stepper glyph.
+- **Faded Ink** (`dim`): secondary text (control names, notes, the "ends" line, percentages), headings and controls of a layer that is off, unchosen options, stepper rings and the disabled stepper glyph, and the dial ring past 12 hours. About 5.4:1 on the ground.
+- **Hairline** (`rule`): rules between layer rows, slider and dial tracks, the disabled stepper ring, keypad and field outlines, sheet edges.
 
 ### Named Rules
 **The Measured Blue Rule.** Sea blue marks an amount on a scale (a length, a level) and nothing else. If it is not measuring, it is not blue.
@@ -220,7 +220,7 @@ A 46 × 28 pill in a 56 × 44 target. On: parchment track, ground thumb at the r
 Words in a row; the chosen one is parchment with a 2 px parchment underline (28 px wide, 24 px for stops), the rest faded. When the layer is off every word is faded but stays usable. Presses show a Deep Sea wash, no ripple. The Until I stop stop uses an infinity icon.
 
 ### Value Stepper
-− and + in 36 px hairline rings inside 44 px targets, with the value in Mono 17 px between them in a 68 px column. The button at either end of the range disables to a hairline-coloured glyph.
+− and + in 36 px rings of Faded Ink inside 44 px targets, with the value in Mono 17 px between them in a 68 px column. The button at either end of the range disables: its ring drops to the hairline and its glyph to Faded Ink, so it stays readable but plainly loses its outline.
 
 ### Level Slider
 A 2 px track: sea-blue fill, hairline remainder, an 8 px-radius parchment thumb, a Sea Wash touch overlay. When the layer is off the fill and thumb fade. The percentage sits right-aligned in Mono 13 px.
