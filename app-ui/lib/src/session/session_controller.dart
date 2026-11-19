@@ -7,7 +7,7 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:flutter/foundation.dart';
 
 import 'audio_port.dart';

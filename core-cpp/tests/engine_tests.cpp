@@ -1,6 +1,6 @@
-// libambientsynth unit tests. Plain executable, no framework: each test
+// libhumspansynth unit tests. Plain executable, no framework: each test
 // returns normally or records a failure; main() exits non-zero on failure.
-#include "ambient_engine.h"
+#include "humspan_engine.h"
 
 #include <algorithm>
 #include <atomic>
@@ -53,19 +53,19 @@ constexpr uint32_t kRate = 48000;
 constexpr int kBlock = 512;
 
 struct Engine {
-    explicit Engine(uint32_t rate = kRate, uint64_t seed = 1) : e(ambient_engine_create(rate, seed)) {}
-    ~Engine() { ambient_engine_destroy(e); }
-    ambient_engine* e;
+    explicit Engine(uint32_t rate = kRate, uint64_t seed = 1) : e(humspan_engine_create(rate, seed)) {}
+    ~Engine() { humspan_engine_destroy(e); }
+    humspan_engine* e;
 };
 
 // Renders `frames` frames, returns interleaved stereo.
-static std::vector<float> render(ambient_engine* e, int64_t frames, int* lastResult = nullptr) {
+static std::vector<float> render(humspan_engine* e, int64_t frames, int* lastResult = nullptr) {
     std::vector<float> out(static_cast<size_t>(frames) * 2);
     int64_t done = 0;
     int result = 0;
     while (done < frames) {
         const int n = static_cast<int>(std::min<int64_t>(kBlock, frames - done));
-        result = ambient_engine_render(e, out.data() + done * 2, n);
+        result = humspan_engine_render(e, out.data() + done * 2, n);
         done += n;
     }
     if (lastResult) *lastResult = result;
@@ -89,11 +89,11 @@ static int64_t soundingFrames(const std::vector<float>& x) {
 }
 
 // Render until the session finishes; returns total frames rendered.
-static int64_t renderUntilFinished(ambient_engine* e, int64_t limit, std::vector<float>* tail = nullptr) {
+static int64_t renderUntilFinished(humspan_engine* e, int64_t limit, std::vector<float>* tail = nullptr) {
     std::vector<float> block(kBlock * 2);
     int64_t frames = 0;
     while (frames < limit) {
-        const int r = ambient_engine_render(e, block.data(), kBlock);
+        const int r = humspan_engine_render(e, block.data(), kBlock);
         if (r == 0) {
             // Count only the frames that sounded in this final block.
             int64_t sounding = soundingFrames(block);
@@ -158,17 +158,17 @@ static std::vector<double> averagedPsd(const std::vector<float>& x, size_t n) {
 // ---------------------------------------------------------------------------
 static void testSpectralSlopeAndLevel() {
     std::printf("spectral slope and level\n");
-    struct Case { ambient_noise_color color; const char* name; double slopeDbPerOctave; };
+    struct Case { humspan_noise_color color; const char* name; double slopeDbPerOctave; };
     const Case cases[] = {
-        {AMBIENT_NOISE_WHITE, "white", 0.0},
-        {AMBIENT_NOISE_PINK, "pink", -3.0},
-        {AMBIENT_NOISE_BROWN, "brown", -6.0},
+        {HUMSPAN_NOISE_WHITE, "white", 0.0},
+        {HUMSPAN_NOISE_PINK, "pink", -3.0},
+        {HUMSPAN_NOISE_BROWN, "brown", -6.0},
     };
     for (const auto& c : cases) {
         Engine eng;
-        ambient_engine_set_noise_color(eng.e, c.color);
-        ambient_engine_set_volume(eng.e, 1.0f);
-        ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+        humspan_engine_set_noise_color(eng.e, c.color);
+        humspan_engine_set_volume(eng.e, 1.0f);
+        humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
         render(eng.e, kRate / 2); // let the colour/volume smoothing settle
         const auto x = render(eng.e, kRate * 20);
 
@@ -181,7 +181,7 @@ static void testSpectralSlopeAndLevel() {
 
         // White and pink are 8 dB under the old 0.18 reference. Brown is 9 dB
         // above them (about +1 dB versus 0.18) so it matches by ear and stays clean.
-        const double targetDb = c.color == AMBIENT_NOISE_BROWN ? 1.0 : -8.0;
+        const double targetDb = c.color == HUMSPAN_NOISE_BROWN ? 1.0 : -8.0;
         const double level = toDb(rms(x, 0, x.size() / 2) / 0.18);
         CHECK(std::fabs(level - targetDb) < 1.0, "%s level %.2f dB, want %.1f", c.name, level, targetDb);
     }
@@ -190,7 +190,7 @@ static void testSpectralSlopeAndLevel() {
 static void testDeterminism() {
     std::printf("determinism\n");
     Engine a(kRate, 42), b(kRate, 42), c(kRate, 43);
-    for (auto* e : {a.e, b.e, c.e}) ambient_engine_start(e, 0.0, 0.0, 0.0);
+    for (auto* e : {a.e, b.e, c.e}) humspan_engine_start(e, 0.0, 0.0, 0.0);
     const auto xa = render(a.e, 10000), xb = render(b.e, 10000), xc = render(c.e, 10000);
     CHECK(xa == xb, "same seed should give identical output");
     CHECK(xa != xc, "different seeds should differ");
@@ -209,22 +209,22 @@ static void testDeterminism() {
 static void testTimerIsFrameAccurate() {
     std::printf("timer is frame-accurate\n");
     Engine eng;
-    ambient_engine_start(eng.e, 2.5, 0.0, 0.0);
+    humspan_engine_start(eng.e, 2.5, 0.0, 0.0);
     const int64_t frames = renderUntilFinished(eng.e, kRate * 10);
     CHECK(frames == 120000, "2.5 s at 48 kHz rendered %lld frames, want 120000", (long long)frames);
-    CHECK(!ambient_engine_is_playing(eng.e), "should report finished");
+    CHECK(!humspan_engine_is_playing(eng.e), "should report finished");
 }
 
 static void testTimerSurvivesSampleRateChange() {
     std::printf("timer survives a sample-rate change\n");
     Engine eng;
-    ambient_engine_start(eng.e, 2.5, 0.0, 0.0);
+    humspan_engine_start(eng.e, 2.5, 0.0, 0.0);
     render(eng.e, 48000); // exactly 1.0 s at 48 kHz
-    CHECK(std::fabs(ambient_engine_elapsed_seconds(eng.e) - 1.0) < 1e-9, "elapsed %.6f",
-          ambient_engine_elapsed_seconds(eng.e));
+    CHECK(std::fabs(humspan_engine_elapsed_seconds(eng.e) - 1.0) < 1e-9, "elapsed %.6f",
+          humspan_engine_elapsed_seconds(eng.e));
 
     // Route change: the OS reopens the stream at 44.1 kHz.
-    ambient_engine_set_sample_rate(eng.e, 44100);
+    humspan_engine_set_sample_rate(eng.e, 44100);
     const int64_t frames = renderUntilFinished(eng.e, 44100 * 10);
     CHECK(frames == 66150, "remaining 1.5 s at 44.1 kHz rendered %lld frames, want 66150", (long long)frames);
 }
@@ -232,43 +232,43 @@ static void testTimerSurvivesSampleRateChange() {
 static void testRemainingSeconds() {
     std::printf("remaining seconds\n");
     Engine eng;
-    CHECK(ambient_engine_remaining_seconds(eng.e) == 0.0, "idle engine has nothing remaining");
+    CHECK(humspan_engine_remaining_seconds(eng.e) == 0.0, "idle engine has nothing remaining");
 
-    ambient_engine_start(eng.e, 10.0, 0.0, 0.0);
+    humspan_engine_start(eng.e, 10.0, 0.0, 0.0);
     render(eng.e, kRate * 4);
-    CHECK(std::fabs(ambient_engine_remaining_seconds(eng.e) - 6.0) < 1e-9, "remaining %.6f, want 6",
-          ambient_engine_remaining_seconds(eng.e));
+    CHECK(std::fabs(humspan_engine_remaining_seconds(eng.e) - 6.0) < 1e-9, "remaining %.6f, want 6",
+          humspan_engine_remaining_seconds(eng.e));
     renderUntilFinished(eng.e, kRate * 10);
-    CHECK(ambient_engine_remaining_seconds(eng.e) == 0.0, "finished session has nothing remaining");
+    CHECK(humspan_engine_remaining_seconds(eng.e) == 0.0, "finished session has nothing remaining");
 
-    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
     render(eng.e, kRate);
-    CHECK(ambient_engine_remaining_seconds(eng.e) < 0.0, "until-stopped session reports negative");
+    CHECK(humspan_engine_remaining_seconds(eng.e) < 0.0, "until-stopped session reports negative");
 }
 
 static void testPauseHoldsPlaceAndResumes() {
     std::printf("pause holds the session's place and resumes\n");
     Engine eng;
-    ambient_engine_start(eng.e, 10.0, 0.0, 0.0);
+    humspan_engine_start(eng.e, 10.0, 0.0, 0.0);
     render(eng.e, kRate * 2);
-    CHECK(!ambient_engine_is_paused(eng.e), "not paused before pause");
+    CHECK(!humspan_engine_is_paused(eng.e), "not paused before pause");
 
-    ambient_engine_pause(eng.e, 0.1); // headphones out
+    humspan_engine_pause(eng.e, 0.1); // headphones out
     const auto fade = render(eng.e, kRate / 2);
     CHECK(rms(fade, 0, kRate / 50) > 0.0, "pause fades rather than cutting");
     CHECK(soundingFrames(fade) <= int64_t(0.1 * kRate), "silent after the 0.1 s pause fade");
-    CHECK(ambient_engine_is_paused(eng.e) && ambient_engine_is_playing(eng.e), "paused session is still active");
+    CHECK(humspan_engine_is_paused(eng.e) && humspan_engine_is_playing(eng.e), "paused session is still active");
 
     const auto held = render(eng.e, kRate * 3);
     CHECK(soundingFrames(held) == 0, "no output while paused");
-    CHECK(std::fabs(ambient_engine_elapsed_seconds(eng.e) - 2.1) < 1e-4, "elapsed frozen at %.4f, want 2.1",
-          ambient_engine_elapsed_seconds(eng.e));
-    CHECK(std::fabs(ambient_engine_remaining_seconds(eng.e) - 7.9) < 1e-4, "remaining %.4f, want 7.9",
-          ambient_engine_remaining_seconds(eng.e));
+    CHECK(std::fabs(humspan_engine_elapsed_seconds(eng.e) - 2.1) < 1e-4, "elapsed frozen at %.4f, want 2.1",
+          humspan_engine_elapsed_seconds(eng.e));
+    CHECK(std::fabs(humspan_engine_remaining_seconds(eng.e) - 7.9) < 1e-4, "remaining %.4f, want 7.9",
+          humspan_engine_remaining_seconds(eng.e));
 
-    ambient_engine_resume(eng.e, 0.5);
+    humspan_engine_resume(eng.e, 0.5);
     const auto rise = render(eng.e, kRate);
-    CHECK(!ambient_engine_is_paused(eng.e), "resumed");
+    CHECK(!humspan_engine_is_paused(eng.e), "resumed");
     auto window = [&](double t) { return rms(rise, size_t(t * kRate), size_t((t + 0.05) * kRate)); };
     CHECK(window(0.0) < 0.1 * window(0.8), "resume fades in from silence");
     CHECK(window(0.1) < window(0.25) && window(0.25) < window(0.4), "level rises over the resume fade");
@@ -282,39 +282,39 @@ static void testPauseHoldsPlaceAndResumes() {
 static void testStopWhilePausedEndsAtOnce() {
     std::printf("stop while paused ends at once\n");
     Engine eng;
-    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
     render(eng.e, kRate);
-    ambient_engine_pause(eng.e, 0.05);
+    humspan_engine_pause(eng.e, 0.05);
     render(eng.e, kRate);
-    ambient_engine_stop(eng.e, 1.0);
+    humspan_engine_stop(eng.e, 1.0);
     int result = 1;
     render(eng.e, kBlock, &result);
-    CHECK(result == 0 && !ambient_engine_is_playing(eng.e) && !ambient_engine_is_paused(eng.e),
+    CHECK(result == 0 && !humspan_engine_is_playing(eng.e) && !humspan_engine_is_paused(eng.e),
           "stop from pause should finish in the next block");
 }
 
 static void testStopDuringPauseFadeFinishes() {
     std::printf("stop during a pause fade still finishes\n");
     Engine eng;
-    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
     render(eng.e, kRate);
-    ambient_engine_pause(eng.e, 0.2);
+    humspan_engine_pause(eng.e, 0.2);
     render(eng.e, kRate / 10); // halfway through the pause fade
-    ambient_engine_stop(eng.e, 1.0);
+    humspan_engine_stop(eng.e, 1.0);
     const int64_t frames = renderUntilFinished(eng.e, kRate * 5);
     CHECK(frames >= 0 && frames <= int64_t(1.0 * kRate) + kBlock, "session should end, took %lld frames",
           (long long)frames);
-    CHECK(!ambient_engine_is_playing(eng.e) && !ambient_engine_is_paused(eng.e), "finished, not paused");
+    CHECK(!humspan_engine_is_playing(eng.e) && !humspan_engine_is_paused(eng.e), "finished, not paused");
 }
 
 static void testDuckLowersLevelAndKeepsClock() {
     std::printf("duck lowers the level within 500 ms and keeps the clock\n");
     Engine eng;
-    ambient_engine_set_volume(eng.e, 1.0f);
-    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
     render(eng.e, kRate);
 
-    ambient_engine_set_duck_gain(eng.e, 0.25f); // phone call: -12 dB
+    humspan_engine_set_duck_gain(eng.e, 0.25f); // phone call: -12 dB
     const auto ducking = render(eng.e, kRate);
     auto window = [&](const std::vector<float>& x, double t) {
         return rms(x, size_t(t * kRate), size_t((t + 0.1) * kRate));
@@ -323,10 +323,10 @@ static void testDuckLowersLevelAndKeepsClock() {
     const double settled = toDb(window(ducking, 0.5) / kBedRms);
     CHECK(early > -9.0, "duck ramps rather than cutting (%.1f dB in first 100 ms)", early);
     CHECK(std::fabs(settled + 12.0) < 1.0, "ducked level %.1f dB, want -12 within 500 ms", settled);
-    CHECK(std::fabs(ambient_engine_elapsed_seconds(eng.e) - 2.0) < 1e-9, "clock kept running: %.4f",
-          ambient_engine_elapsed_seconds(eng.e));
+    CHECK(std::fabs(humspan_engine_elapsed_seconds(eng.e) - 2.0) < 1e-9, "clock kept running: %.4f",
+          humspan_engine_elapsed_seconds(eng.e));
 
-    ambient_engine_set_duck_gain(eng.e, 1.0f);
+    humspan_engine_set_duck_gain(eng.e, 1.0f);
     const auto restored = render(eng.e, kRate);
     CHECK(std::fabs(toDb(window(restored, 0.5) / kBedRms)) < 1.0, "level back to full after the duck");
 }
@@ -347,16 +347,16 @@ static void testBinauralBeatToneAndLevel() {
     // A sine with RMS kBedRms, 6 dB down: amplitude kBedRms * 0.5 * sqrt(2).
     const double want = kBedRms * 0.5 * std::numbers::sqrt2;
     Engine eng;
-    ambient_engine_set_volume(eng.e, 1.0f);
-    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
     render(eng.e, kRate / 2);
     // Tones are measured over 8 s so pink noise's own projection onto them
     // (about 0.002, -36 dB re the tone) stays out of the way.
     const auto off = render(eng.e, kRate * 8);
     CHECK(toneAmplitude(off, 0, 180, 0, 8 * kRate) < 0.05 * want, "no tone while off");
 
-    ambient_engine_set_binaural(eng.e, 1);
-    ambient_engine_set_beat_frequency(eng.e, 4.0f);
+    humspan_engine_set_binaural(eng.e, 1);
+    humspan_engine_set_beat_frequency(eng.e, 4.0f);
     render(eng.e, kRate / 2); // let the layer fade in
     auto x = render(eng.e, kRate * 8);
     const double left = toneAmplitude(x, 0, 180, 0, 8 * kRate);
@@ -366,18 +366,18 @@ static void testBinauralBeatToneAndLevel() {
     CHECK(toneAmplitude(x, 0, 184, 0, 8 * kRate) < 0.05 * want, "left has no 184 Hz");
     CHECK(toneAmplitude(x, 1, 180, 0, 8 * kRate) < 0.05 * want, "right has no 180 Hz");
 
-    ambient_engine_set_beat_frequency(eng.e, 10.0f);
+    humspan_engine_set_beat_frequency(eng.e, 10.0f);
     render(eng.e, kRate / 2);
     x = render(eng.e, kRate * 8);
     CHECK(std::fabs(toDb(toneAmplitude(x, 1, 190, 0, 8 * kRate) / want)) < 0.5, "10 Hz beat puts right at 190 Hz");
     CHECK(std::fabs(toDb(toneAmplitude(x, 0, 180, 0, 8 * kRate) / want)) < 0.5, "carrier stays at 180 Hz");
 
-    ambient_engine_set_volume(eng.e, 0.5f); // the beat follows the session volume
+    humspan_engine_set_volume(eng.e, 0.5f); // the beat follows the session volume
     render(eng.e, kRate / 2);
     x = render(eng.e, kRate * 8);
     CHECK(std::fabs(toDb(toneAmplitude(x, 0, 180, 0, 8 * kRate) / (0.5 * want))) < 0.5, "beat follows volume");
 
-    ambient_engine_set_binaural(eng.e, 0);
+    humspan_engine_set_binaural(eng.e, 0);
     const auto fading = render(eng.e, kRate / 2);
     CHECK(toneAmplitude(fading, 0, 180, 0, kRate / 100) > 0.1 * 0.5 * want, "switching off fades, not cuts");
     x = render(eng.e, kRate * 8);
@@ -387,15 +387,15 @@ static void testBinauralBeatToneAndLevel() {
 static void testBoomAlternatesEars() {
     std::printf("boom strikes left then right, under the noise, with the beat\n");
     Engine quiet(kRate, 9), struck(kRate, 9);
-    ambient_engine_set_volume(quiet.e, 1.0f);
-    ambient_engine_set_volume(struck.e, 1.0f);
-    ambient_engine_set_boom(struck.e, 1);
-    ambient_engine_set_boom_interval(struck.e, 4.0f);
-    ambient_engine_set_binaural(quiet.e, 1);
-    ambient_engine_set_binaural(struck.e, 1);
-    ambient_engine_set_beat_frequency(quiet.e, 4.0f);
-    ambient_engine_set_beat_frequency(struck.e, 4.0f);
-    for (auto* e : {quiet.e, struck.e}) ambient_engine_start(e, 0.0, 0.0, 0.0);
+    humspan_engine_set_volume(quiet.e, 1.0f);
+    humspan_engine_set_volume(struck.e, 1.0f);
+    humspan_engine_set_boom(struck.e, 1);
+    humspan_engine_set_boom_interval(struck.e, 4.0f);
+    humspan_engine_set_binaural(quiet.e, 1);
+    humspan_engine_set_binaural(struck.e, 1);
+    humspan_engine_set_beat_frequency(quiet.e, 4.0f);
+    humspan_engine_set_beat_frequency(struck.e, 4.0f);
+    for (auto* e : {quiet.e, struck.e}) humspan_engine_start(e, 0.0, 0.0, 0.0);
 
     const auto a = render(quiet.e, kRate * 8);
     const auto b = render(struck.e, kRate * 8);
@@ -432,7 +432,7 @@ static void testBoomAlternatesEars() {
     const double leftBeat = toneAmplitude(b, 0, 180, kRate, 2 * kRate);
     CHECK(std::fabs(toDb(leftBeat / want)) < 1.0, "binaural stays with the boom, %.2f dB", toDb(leftBeat / want));
 
-    ambient_engine_set_boom(struck.e, 0);
+    humspan_engine_set_boom(struck.e, 0);
     const auto gone = render(struck.e, kRate);
     const auto still = render(quiet.e, kRate);
     double leftover = 0;
@@ -447,8 +447,8 @@ static void testBoomAlternatesEars() {
 static void testFadeOutEndsInSilence() {
     std::printf("fade-out ends in silence\n");
     Engine eng;
-    ambient_engine_set_volume(eng.e, 1.0f);
-    ambient_engine_start(eng.e, 4.0, 0.0, 3.0);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_start(eng.e, 4.0, 0.0, 3.0);
     const auto x = render(eng.e, kRate * 4);
     auto window = [&](double t) { return rms(x, size_t(t * kRate), size_t((t + 0.1) * kRate)); };
 
@@ -466,8 +466,8 @@ static void testShortSessionShrinksBothFades() {
     // 13 s with a 5 s fade-in and 60 s fade-out: 65 s of fades scale by 13/65
     // to a 1 s fade-in and a 12 s fade-out, so full level is reached at 1 s.
     Engine eng;
-    ambient_engine_set_volume(eng.e, 1.0f);
-    ambient_engine_start(eng.e, 13.0, 5.0, 60.0);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_start(eng.e, 13.0, 5.0, 60.0);
     const auto x = render(eng.e, kRate * 13);
     auto window = [&](double t) { return rms(x, size_t(t * kRate), size_t((t + 0.05) * kRate)); };
     CHECK(std::fabs(toDb(window(0.975) / kBedRms)) < 1.0, "level at 1 s is %.1f dB from full",
@@ -480,8 +480,8 @@ static void testShortSessionShrinksBothFades() {
 static void testFadeInIsSmooth() {
     std::printf("fade-in rises from silence\n");
     Engine eng;
-    ambient_engine_set_volume(eng.e, 1.0f);
-    ambient_engine_start(eng.e, 0.0, 2.0, 0.0);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_start(eng.e, 0.0, 2.0, 0.0);
     const auto x = render(eng.e, kRate * 3);
     auto window = [&](double t) { return rms(x, size_t(t * kRate), size_t((t + 0.05) * kRate)); };
     CHECK(window(0.0) < 0.01 * window(2.5), "first 50 ms should be near silence");
@@ -491,10 +491,10 @@ static void testFadeInIsSmooth() {
 static void testStopFadesAndFinishes() {
     std::printf("stop fades out and finishes\n");
     Engine eng;
-    ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
     render(eng.e, kRate);
-    CHECK(ambient_engine_is_playing(eng.e), "infinite session should still be playing");
-    ambient_engine_stop(eng.e, 0.5);
+    CHECK(humspan_engine_is_playing(eng.e), "infinite session should still be playing");
+    humspan_engine_stop(eng.e, 0.5);
     const int64_t frames = renderUntilFinished(eng.e, kRate * 2);
     CHECK(frames >= int64_t(0.5 * kRate) - kBlock && frames <= int64_t(0.5 * kRate) + kBlock,
           "stop took %lld frames, want about %d", (long long)frames, kRate / 2);
@@ -502,11 +502,11 @@ static void testStopFadesAndFinishes() {
 
 static void testNeverClips() {
     std::printf("output never reaches full scale\n");
-    for (auto color : {AMBIENT_NOISE_WHITE, AMBIENT_NOISE_PINK, AMBIENT_NOISE_BROWN}) {
+    for (auto color : {HUMSPAN_NOISE_WHITE, HUMSPAN_NOISE_PINK, HUMSPAN_NOISE_BROWN}) {
         Engine eng(kRate, 7);
-        ambient_engine_set_noise_color(eng.e, color);
-        ambient_engine_set_volume(eng.e, 1.0f);
-        ambient_engine_start(eng.e, 0.0, 0.0, 0.0);
+        humspan_engine_set_noise_color(eng.e, color);
+        humspan_engine_set_volume(eng.e, 1.0f);
+        humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
         const auto x = render(eng.e, kRate * 30);
         float peak = 0;
         for (float s : x) peak = std::max(peak, std::fabs(s));
@@ -520,28 +520,28 @@ static void testRenderDoesNotAllocate() {
     std::vector<float> block(kBlock * 2);
     g_allocations = 0;
     g_trackAllocations = true;
-    ambient_engine_start(eng.e, 30.0, 1.0, 5.0);
+    humspan_engine_start(eng.e, 30.0, 1.0, 5.0);
     for (int i = 0; i < 3000; ++i) {
-        if (i % 200 == 0) ambient_engine_set_noise_color(eng.e, ambient_noise_color(i / 200 % 3));
-        if (i % 300 == 0) ambient_engine_set_volume(eng.e, float(i % 7) / 7.0f);
-        if (i == 100) ambient_engine_set_binaural(eng.e, 1);
-        if (i == 150) ambient_engine_set_boom(eng.e, 1);
-        if (i % 280 == 0) ambient_engine_set_boom_interval(eng.e, float(2 + (i / 280) % 3 * 2));
-        if (i == 1300) ambient_engine_set_boom(eng.e, 0);
-        if (i % 250 == 0) ambient_engine_set_beat_frequency(eng.e, float(2 + i / 250 % 5 * 2));
-        if (i == 400) ambient_engine_set_duck_gain(eng.e, 0.3f);
-        if (i == 600) ambient_engine_set_duck_gain(eng.e, 1.0f);
-        if (i == 700) ambient_engine_pause(eng.e, 0.2);
-        if (i == 900) ambient_engine_resume(eng.e, 1.0);
-        if (i == 1200) ambient_engine_set_binaural(eng.e, 0);
-        if (i == 1500) ambient_engine_stop(eng.e, 2.0);
-        if (i == 2000) ambient_engine_start(eng.e, 5.0, 1.0, 1.0);
-        if (i == 2100) ambient_engine_pause(eng.e, 0.2);
-        if (i == 2105) ambient_engine_stop(eng.e, 1.0); // stop mid pause fade
-        if (i == 2200) ambient_engine_start(eng.e, 5.0, 1.0, 1.0);
-        if (i == 2500) ambient_engine_pause(eng.e, 0.1);
-        if (i == 2700) ambient_engine_stop(eng.e, 1.0); // stop while paused
-        ambient_engine_render(eng.e, block.data(), kBlock);
+        if (i % 200 == 0) humspan_engine_set_noise_color(eng.e, humspan_noise_color(i / 200 % 3));
+        if (i % 300 == 0) humspan_engine_set_volume(eng.e, float(i % 7) / 7.0f);
+        if (i == 100) humspan_engine_set_binaural(eng.e, 1);
+        if (i == 150) humspan_engine_set_boom(eng.e, 1);
+        if (i % 280 == 0) humspan_engine_set_boom_interval(eng.e, float(2 + (i / 280) % 3 * 2));
+        if (i == 1300) humspan_engine_set_boom(eng.e, 0);
+        if (i % 250 == 0) humspan_engine_set_beat_frequency(eng.e, float(2 + i / 250 % 5 * 2));
+        if (i == 400) humspan_engine_set_duck_gain(eng.e, 0.3f);
+        if (i == 600) humspan_engine_set_duck_gain(eng.e, 1.0f);
+        if (i == 700) humspan_engine_pause(eng.e, 0.2);
+        if (i == 900) humspan_engine_resume(eng.e, 1.0);
+        if (i == 1200) humspan_engine_set_binaural(eng.e, 0);
+        if (i == 1500) humspan_engine_stop(eng.e, 2.0);
+        if (i == 2000) humspan_engine_start(eng.e, 5.0, 1.0, 1.0);
+        if (i == 2100) humspan_engine_pause(eng.e, 0.2);
+        if (i == 2105) humspan_engine_stop(eng.e, 1.0); // stop mid pause fade
+        if (i == 2200) humspan_engine_start(eng.e, 5.0, 1.0, 1.0);
+        if (i == 2500) humspan_engine_pause(eng.e, 0.1);
+        if (i == 2700) humspan_engine_stop(eng.e, 1.0); // stop while paused
+        humspan_engine_render(eng.e, block.data(), kBlock);
     }
     g_trackAllocations = false;
     CHECK(g_allocations == 0, "%d allocations during render", g_allocations.load());

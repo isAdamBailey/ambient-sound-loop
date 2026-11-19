@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "dev.ambientsoundloop" "\0"
-            VALUE "FileDescription", "Ambient Lucidity" "\0"
+            VALUE "CompanyName", "dev.humspan" "\0"
+            VALUE "FileDescription", "Humspan" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "ambient_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 dev.ambientsoundloop. All rights reserved." "\0"
-            VALUE "OriginalFilename", "ambient_app.exe" "\0"
-            VALUE "ProductName", "Ambient Lucidity" "\0"
+            VALUE "InternalName", "humspan" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 dev.humspan. All rights reserved." "\0"
+            VALUE "OriginalFilename", "humspan.exe" "\0"
+            VALUE "ProductName", "Humspan" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -6,7 +6,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace ambient::dsp {
+namespace humspan::dsp {
 
 // Phase-continuous sine, normalised to kNoiseRms like every generator.
 // Changing the frequency keeps the phase, so it never clicks.
@@ -130,4 +130,4 @@ private:
     bool struck_ = false;
 };
 
-} // namespace ambient::dsp
+} // namespace humspan::dsp

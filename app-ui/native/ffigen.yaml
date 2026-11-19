@@ -1,25 +1,25 @@
 # Regenerate with `dart run ffigen --config ffigen.yaml` from app-ui/native.
-name: AmbientNativeBindings
+name: HumspanNativeBindings
 description: |
-  Bindings for core-cpp/include/ambient_engine.h and
-  platform-audio/player/ambient_player.h.
+  Bindings for core-cpp/include/humspan_engine.h and
+  platform-audio/player/humspan_player.h.
 
   Regenerate with `dart run ffigen --config ffigen.yaml`.
-output: 'lib/src/ambient_native_bindings.g.dart'
+output: 'lib/src/humspan_native_bindings.g.dart'
 headers:
   entry-points:
-    - '../../core-cpp/include/ambient_engine.h'
-    - '../../platform-audio/player/ambient_player.h'
+    - '../../core-cpp/include/humspan_engine.h'
+    - '../../platform-audio/player/humspan_player.h'
   include-directives:
-    - '../../core-cpp/include/ambient_engine.h'
-    - '../../platform-audio/player/ambient_player.h'
+    - '../../core-cpp/include/humspan_engine.h'
+    - '../../platform-audio/player/humspan_player.h'
 compiler-opts:
   - '-I../../core-cpp/include'
 ffi-native:
-  asset-id: 'package:ambient_native/ambient_native.dart'
+  asset-id: 'package:humspan_native/humspan_native.dart'
 functions:
   include:
-    - 'ambient_.*'
+    - 'humspan_.*'
 comments:
   style: any
   length: full

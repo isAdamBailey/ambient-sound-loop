@@ -1,6 +1,6 @@
-import 'package:ambient_app/src/session/platform_events.dart';
-import 'package:ambient_app/src/session/session_controller.dart';
-import 'package:ambient_app/src/session/settings.dart';
+import 'package:humspan/src/session/platform_events.dart';
+import 'package:humspan/src/session/session_controller.dart';
+import 'package:humspan/src/session/settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_audio.dart';

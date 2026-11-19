@@ -1,6 +1,6 @@
-import 'package:ambient_app/src/session/length.dart';
-import 'package:ambient_app/src/session/settings.dart';
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan/src/session/length.dart';
+import 'package:humspan/src/session/settings.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';

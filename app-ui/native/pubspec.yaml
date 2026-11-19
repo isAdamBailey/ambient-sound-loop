@@ -1,5 +1,5 @@
-name: ambient_native
-description: "Native audio layer for the session screen: libambientsynth plus a miniaudio output stream, built by a Dart build hook, with ffigen bindings."
+name: humspan_native
+description: "Native audio layer for the session screen: libhumspansynth plus a miniaudio output stream, built by a Dart build hook, with ffigen bindings."
 version: 0.1.0
 publish_to: none
 

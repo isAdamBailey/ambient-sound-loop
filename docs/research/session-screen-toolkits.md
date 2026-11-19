@@ -2,7 +2,7 @@
 
 Researched 16 November 2026, from each project's own docs, source, or API reference. This note does not choose a toolkit.
 
-The question is which maintained toolkit can ship one codebase that draws a real window or screen on macOS, Windows, Linux, iOS, and Android, and can call the flat C functions in `core-cpp/include/ambient_engine.h` from the UI control thread. A separate native audio layer calls `ambient_engine_render`. The UI also has to be able to put play/stop and a time readout on the iOS now-playing surface and the Android media session.
+The question is which maintained toolkit can ship one codebase that draws a real window or screen on macOS, Windows, Linux, iOS, and Android, and can call the flat C functions in `core-cpp/include/humspan_engine.h` from the UI control thread. A separate native audio layer calls `humspan_engine_render`. The UI also has to be able to put play/stop and a time readout on the iOS now-playing surface and the Android media session.
 
 A target counts as shipped when that project's maintained release documents it as supported. A community port, a beta, or a backend the project says it does not support is recorded, and does not by itself satisfy the five platforms. "Qualifies" below means the maintained release covers all five and UI code can make the C call off the audio thread. Where the docs show no now-playing API, that gap is stated even if the verdict is still qualifies, because the call path is ordinary platform interop rather than a media widget.
 

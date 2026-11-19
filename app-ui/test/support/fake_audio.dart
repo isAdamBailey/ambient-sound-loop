@@ -1,5 +1,5 @@
-import 'package:ambient_app/src/session/audio_port.dart';
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan/src/session/audio_port.dart';
+import 'package:humspan_native/humspan_native.dart';
 
 /// Stands in for the native engine and stream. Tests move the engine's state
 /// by hand, the way the audio thread would.

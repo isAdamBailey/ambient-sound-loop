@@ -1,9 +1,9 @@
 /// What the session controller needs from the native audio layer: the engine
-/// controls from `ambient_engine.h` plus the output stream from
-/// `ambient_player.h`. [FfiAudioPort] is the real one; tests use a fake.
+/// controls from `humspan_engine.h` plus the output stream from
+/// `humspan_player.h`. [FfiAudioPort] is the real one; tests use a fake.
 library;
 
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan_native/humspan_native.dart';
 
 abstract interface class AudioPort {
   void setColor(NoiseColor color);

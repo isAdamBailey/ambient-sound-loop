@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = Ambient Lucidity
+PRODUCT_NAME = Humspan
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = dev.ambientsoundloop.ambientApp
+PRODUCT_BUNDLE_IDENTIFIER = dev.humspan.app
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 dev.ambientsoundloop. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 dev.humspan. All rights reserved.
