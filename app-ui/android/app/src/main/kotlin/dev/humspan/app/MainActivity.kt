@@ -1,4 +1,4 @@
-package dev.ambientsoundloop.ambient_app
+package dev.humspan.app
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -42,7 +42,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-        channel = MethodChannel(messenger, "dev.ambientsoundloop/session")
+        channel = MethodChannel(messenger, "dev.humspan/session")
         channel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "setListening" -> {

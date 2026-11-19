@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <numbers>
 
-namespace ambient::dsp {
+namespace humspan::dsp {
 
 // xoshiro256** (Blackman & Vigna), seeded through splitmix64.
 class Xoshiro256 {
@@ -113,4 +113,4 @@ private:
     float a_ = 0, oneMinusA_ = 0, gain_ = 0, y_ = 0;
 };
 
-} // namespace ambient::dsp
+} // namespace humspan::dsp

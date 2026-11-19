@@ -1,7 +1,7 @@
 /// The session screen: the whole app. Spec #9 §2, §3 and §8.
 library;
 
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../session/session_controller.dart';

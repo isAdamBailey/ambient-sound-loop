@@ -1,7 +1,7 @@
-import 'package:ambient_app/src/session/length.dart';
-import 'package:ambient_app/src/session/session_controller.dart';
-import 'package:ambient_app/src/session/settings.dart';
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan/src/session/length.dart';
+import 'package:humspan/src/session/session_controller.dart';
+import 'package:humspan/src/session/settings.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 

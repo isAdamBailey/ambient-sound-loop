@@ -8,7 +8,7 @@
 #include <optional>
 #include <type_traits>
 
-namespace ambient::engine {
+namespace humspan::engine {
 
 template <typename T, std::size_t Capacity>
 class SpscQueue {
@@ -44,4 +44,4 @@ private:
     alignas(64) std::atomic<std::size_t> tail_{0};
 };
 
-} // namespace ambient::engine
+} // namespace humspan::engine

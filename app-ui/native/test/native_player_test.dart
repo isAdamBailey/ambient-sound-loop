@@ -2,7 +2,7 @@
 // drive the real engine. Audio is rendered by hand, so no device is needed.
 import 'dart:ffi';
 
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:ffi/ffi.dart';
 import 'package:test/test.dart';
 

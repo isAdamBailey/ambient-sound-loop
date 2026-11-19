@@ -1,4 +1,4 @@
-# Ambient Lucidity
+# Humspan
 
 The session screen. One Flutter app for macOS, Windows, Linux, iOS and Android. It plays through the native engine in `platform-audio/player`.
 

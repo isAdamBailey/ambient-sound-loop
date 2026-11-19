@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 
 import 'session_controller.dart';
 
-const sessionChannelName = 'dev.ambientsoundloop/session';
+const sessionChannelName = 'dev.humspan/session';
 
 /// Applies one call from the platform channel to the session.
 void applySessionEvent(SessionController controller, String method) {

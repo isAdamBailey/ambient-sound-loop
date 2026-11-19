@@ -1,9 +1,9 @@
-import 'package:ambient_app/src/app_name.dart';
-import 'package:ambient_app/src/session/length.dart';
-import 'package:ambient_app/src/session/now_playing.dart';
-import 'package:ambient_app/src/session/session_controller.dart';
-import 'package:ambient_app/src/session/settings.dart';
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan/src/app_name.dart';
+import 'package:humspan/src/session/length.dart';
+import 'package:humspan/src/session/now_playing.dart';
+import 'package:humspan/src/session/session_controller.dart';
+import 'package:humspan/src/session/settings.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_audio.dart';

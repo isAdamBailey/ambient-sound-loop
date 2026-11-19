@@ -1,4 +1,4 @@
-// Builds the native audio layer (libambientsynth + platform-audio/player +
+// Builds the native audio layer (libhumspansynth + platform-audio/player +
 // miniaudio) as one dynamic library for the target platform.
 import 'dart:io';
 
@@ -30,11 +30,11 @@ void main(List<String> args) async {
     final miniaudioDir = await _fetchMiniaudio(input.outputDirectoryShared);
 
     final builder = CBuilder.library(
-      name: 'ambient_native',
-      assetName: 'ambient_native.dart',
+      name: 'humspan_native',
+      assetName: 'humspan_native.dart',
       sources: [
         '${_repo}core-cpp/src/engine/engine.cpp',
-        '${_repo}platform-audio/player/ambient_player.cpp',
+        '${_repo}platform-audio/player/humspan_player.cpp',
         // The iOS backend of miniaudio is Objective-C.
         apple
             ? '${_repo}platform-audio/player/miniaudio_impl.mm'

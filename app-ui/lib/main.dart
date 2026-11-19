@@ -1,4 +1,4 @@
-import 'package:ambient_native/ambient_native.dart';
+import 'package:humspan_native/humspan_native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';

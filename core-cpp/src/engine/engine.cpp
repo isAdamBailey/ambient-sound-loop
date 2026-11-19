@@ -1,6 +1,6 @@
-// libambientsynth engine: procedural noise, smoothed parameters, a timer kept
+// libhumspansynth engine: procedural noise, smoothed parameters, a timer kept
 // in rendered audio time, psychoacoustic fades and a soft output clipper.
-#include "ambient_engine.h"
+#include "humspan_engine.h"
 
 #include "denormals.hpp"
 #include "dsp/noise.hpp"
@@ -15,12 +15,12 @@
 
 namespace {
 
-using ambient::dsp::BrownFilter;
-using ambient::dsp::kWhiteGain;
-using ambient::dsp::PinkFilter;
-using ambient::dsp::ResonantBoom;
-using ambient::dsp::SineOscillator;
-using ambient::dsp::Xoshiro256;
+using humspan::dsp::BrownFilter;
+using humspan::dsp::kWhiteGain;
+using humspan::dsp::PinkFilter;
+using humspan::dsp::ResonantBoom;
+using humspan::dsp::SineOscillator;
+using humspan::dsp::Xoshiro256;
 
 constexpr int kColorCount = 3;
 constexpr double kSmoothingSeconds = 0.03; // parameter smoothing time constant
@@ -90,10 +90,10 @@ struct Channel {
 
 } // namespace
 
-struct ambient_engine {
+struct humspan_engine {
     // ---- control -> audio ----
-    ambient::engine::SpscQueue<Command, 16> commands;
-    std::atomic<int> color{AMBIENT_NOISE_PINK};
+    humspan::engine::SpscQueue<Command, 16> commands;
+    std::atomic<int> color{HUMSPAN_NOISE_PINK};
     std::atomic<float> volume{0.5f};
     std::atomic<float> duck{1.0f};
     std::atomic<bool> binaural{false};
@@ -265,7 +265,7 @@ struct ambient_engine {
     }
 
     int render(float* out, int32_t frames) {
-        ambient::engine::ScopedFlushDenormals ftz;
+        humspan::engine::ScopedFlushDenormals ftz;
 
         while (auto cmd = commands.pop()) {
             handle(*cmd);
@@ -318,16 +318,16 @@ struct ambient_engine {
                 Channel& chan = channels[ch];
                 const float white = chan.rng.bipolar();
                 float noise = 0.0f;
-                if (colorGain[AMBIENT_NOISE_WHITE] > kSilent) {
-                    noise += colorGain[AMBIENT_NOISE_WHITE] * white * kWhiteGain;
+                if (colorGain[HUMSPAN_NOISE_WHITE] > kSilent) {
+                    noise += colorGain[HUMSPAN_NOISE_WHITE] * white * kWhiteGain;
                 }
                 // Filters keep running while audible or fading in; skipped
                 // only when fully silent (their state then fades in from 0).
-                if (colorGain[AMBIENT_NOISE_PINK] > kSilent || targetColor == AMBIENT_NOISE_PINK) {
-                    noise += colorGain[AMBIENT_NOISE_PINK] * chan.pink.process(white);
+                if (colorGain[HUMSPAN_NOISE_PINK] > kSilent || targetColor == HUMSPAN_NOISE_PINK) {
+                    noise += colorGain[HUMSPAN_NOISE_PINK] * chan.pink.process(white);
                 }
-                if (colorGain[AMBIENT_NOISE_BROWN] > kSilent || targetColor == AMBIENT_NOISE_BROWN) {
-                    noise += colorGain[AMBIENT_NOISE_BROWN] * chan.brown.process(white);
+                if (colorGain[HUMSPAN_NOISE_BROWN] > kSilent || targetColor == HUMSPAN_NOISE_BROWN) {
+                    noise += colorGain[HUMSPAN_NOISE_BROWN] * chan.brown.process(white);
                 }
                 float layer = 0.0f;
                 if (toneAudible) {
@@ -356,24 +356,24 @@ struct ambient_engine {
 
 extern "C" {
 
-ambient_engine* ambient_engine_create(uint32_t sample_rate, uint64_t seed) {
+humspan_engine* humspan_engine_create(uint32_t sample_rate, uint64_t seed) {
     if (sample_rate == 0) {
         return nullptr;
     }
-    auto* engine = new (std::nothrow) ambient_engine();
+    auto* engine = new (std::nothrow) humspan_engine();
     if (engine == nullptr) {
         return nullptr;
     }
     engine->channels[0].rng.reseed(seed);
     engine->channels[1].rng.reseed(seed ^ 0xA5A5A5A5DEADBEEFull);
     engine->applyRate(static_cast<double>(sample_rate));
-    engine->colorGain[AMBIENT_NOISE_PINK] = 1.0f;
+    engine->colorGain[HUMSPAN_NOISE_PINK] = 1.0f;
     return engine;
 }
 
-void ambient_engine_destroy(ambient_engine* engine) { delete engine; }
+void humspan_engine_destroy(humspan_engine* engine) { delete engine; }
 
-void ambient_engine_set_sample_rate(ambient_engine* engine, uint32_t sample_rate) {
+void humspan_engine_set_sample_rate(humspan_engine* engine, uint32_t sample_rate) {
     if (engine == nullptr || sample_rate == 0) {
         return;
     }
@@ -384,50 +384,50 @@ void ambient_engine_set_sample_rate(ambient_engine* engine, uint32_t sample_rate
     engine->applyRate(static_cast<double>(sample_rate));
 }
 
-void ambient_engine_set_noise_color(ambient_engine* engine, ambient_noise_color color) {
-    if (engine != nullptr && color >= AMBIENT_NOISE_WHITE && color <= AMBIENT_NOISE_BROWN) {
+void humspan_engine_set_noise_color(humspan_engine* engine, humspan_noise_color color) {
+    if (engine != nullptr && color >= HUMSPAN_NOISE_WHITE && color <= HUMSPAN_NOISE_BROWN) {
         engine->color.store(color, std::memory_order_relaxed);
     }
 }
 
-void ambient_engine_set_volume(ambient_engine* engine, float volume) {
+void humspan_engine_set_volume(humspan_engine* engine, float volume) {
     if (engine != nullptr && !std::isnan(volume)) {
         engine->volume.store(std::clamp(volume, 0.0f, 1.0f), std::memory_order_relaxed);
     }
 }
 
-void ambient_engine_set_duck_gain(ambient_engine* engine, float gain) {
+void humspan_engine_set_duck_gain(humspan_engine* engine, float gain) {
     if (engine != nullptr && !std::isnan(gain)) {
         engine->duck.store(std::clamp(gain, 0.0f, 1.0f), std::memory_order_relaxed);
     }
 }
 
-void ambient_engine_set_binaural(ambient_engine* engine, int enabled) {
+void humspan_engine_set_binaural(humspan_engine* engine, int enabled) {
     if (engine != nullptr) {
         engine->binaural.store(enabled != 0, std::memory_order_relaxed);
     }
 }
 
-void ambient_engine_set_beat_frequency(ambient_engine* engine, float beat_hz) {
+void humspan_engine_set_beat_frequency(humspan_engine* engine, float beat_hz) {
     if (engine != nullptr && !std::isnan(beat_hz)) {
         engine->beatHz.store(std::clamp(beat_hz, kMinBeatHz, kMaxBeatHz), std::memory_order_relaxed);
     }
 }
 
-void ambient_engine_set_boom(ambient_engine* engine, int enabled) {
+void humspan_engine_set_boom(humspan_engine* engine, int enabled) {
     if (engine != nullptr) {
         engine->boom.store(enabled != 0, std::memory_order_relaxed);
     }
 }
 
-void ambient_engine_set_boom_interval(ambient_engine* engine, float seconds) {
+void humspan_engine_set_boom_interval(humspan_engine* engine, float seconds) {
     if (engine != nullptr && !std::isnan(seconds)) {
         engine->boomInterval.store(std::clamp(seconds, kMinBoomSeconds, kMaxBoomSeconds),
                                     std::memory_order_relaxed);
     }
 }
 
-int ambient_engine_start(ambient_engine* engine, double duration_seconds,
+int humspan_engine_start(humspan_engine* engine, double duration_seconds,
                          double fade_in_seconds, double fade_out_seconds) {
     if (engine == nullptr) {
         return 0;
@@ -438,47 +438,47 @@ int ambient_engine_start(ambient_engine* engine, double duration_seconds,
                : 0;
 }
 
-int ambient_engine_stop(ambient_engine* engine, double fade_seconds) {
+int humspan_engine_stop(humspan_engine* engine, double fade_seconds) {
     if (engine == nullptr) {
         return 0;
     }
     return engine->commands.push({Command::Type::Stop, 0.0, 0.0, fade_seconds}) ? 1 : 0;
 }
 
-int ambient_engine_pause(ambient_engine* engine, double fade_seconds) {
+int humspan_engine_pause(humspan_engine* engine, double fade_seconds) {
     if (engine == nullptr) {
         return 0;
     }
     return engine->commands.push({Command::Type::Pause, 0.0, 0.0, fade_seconds}) ? 1 : 0;
 }
 
-int ambient_engine_resume(ambient_engine* engine, double fade_in_seconds) {
+int humspan_engine_resume(humspan_engine* engine, double fade_in_seconds) {
     if (engine == nullptr) {
         return 0;
     }
     return engine->commands.push({Command::Type::Resume, 0.0, fade_in_seconds, 0.0}) ? 1 : 0;
 }
 
-int ambient_engine_render(ambient_engine* engine, float* out, int32_t frames) {
+int humspan_engine_render(humspan_engine* engine, float* out, int32_t frames) {
     if (engine == nullptr || out == nullptr || frames <= 0) {
         return 0;
     }
     return engine->render(out, frames);
 }
 
-double ambient_engine_elapsed_seconds(const ambient_engine* engine) {
+double humspan_engine_elapsed_seconds(const humspan_engine* engine) {
     return engine != nullptr ? engine->elapsedReport.load(std::memory_order_relaxed) : 0.0;
 }
 
-double ambient_engine_remaining_seconds(const ambient_engine* engine) {
+double humspan_engine_remaining_seconds(const humspan_engine* engine) {
     return engine != nullptr ? engine->remainingReport.load(std::memory_order_relaxed) : 0.0;
 }
 
-int ambient_engine_is_playing(const ambient_engine* engine) {
+int humspan_engine_is_playing(const humspan_engine* engine) {
     return engine != nullptr && engine->playingReport.load(std::memory_order_relaxed) ? 1 : 0;
 }
 
-int ambient_engine_is_paused(const ambient_engine* engine) {
+int humspan_engine_is_paused(const humspan_engine* engine) {
     return engine != nullptr && engine->pausedReport.load(std::memory_order_relaxed) ? 1 : 0;
 }
 

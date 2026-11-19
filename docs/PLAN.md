@@ -22,7 +22,7 @@ Build a cross-platform application (iOS, Android, Desktop, and optional Web PWA)
 
 ## 2. Cross-Platform C++ System Architecture
 
-To achieve glitch-free background playback and minimal battery consumption while a device screen is locked, the system separates a **Real-Time C++20 Audio Engine (`libambientsynth`)** from the **Platform Audio Drivers** and the **UI Layer**.
+To achieve glitch-free background playback and minimal battery consumption while a device screen is locked, the system separates a **Real-Time C++20 Audio Engine (`libhumspansynth`)** from the **Platform Audio Drivers** and the **UI Layer**.
 
 ```
 +-------------------------------------------------------------------+
@@ -32,13 +32,13 @@ To achieve glitch-free background playback and minimal battery consumption while
                                   |  Control Messages (FFI / JSI)
                                   v
 +-------------------------------------------------------------------+
-|                     Flat C ABI Boundary (ambient_engine.h)        |
+|                     Flat C ABI Boundary (humspan_engine.h)        |
 |        Lock-Free SPSC Command Queue & Atomic Parameter State      |
 +---------------------------------+---------------------------------+
                                   |
                                   v
 +-------------------------------------------------------------------+
-|                Core C++20 DSP Engine (libambientsynth)            |
+|                Core C++20 DSP Engine (libhumspansynth)            |
 |  - Colored Noise & IIR Filters   - Async Multi-Stem Player        |
 |  - Detuned Drones & Binaural     - Granular & Poisson Schedulers  |
 |  - STFT Spectral Seam Analyzer   - Sample-Accurate Master Clock   |
@@ -52,36 +52,36 @@ To achieve glitch-free background playback and minimal battery consumption while
 +---------------+   +---------------+   +---------------+   +---------------+
 ```
 
-### 2.1 Core C++20 Engine Design Principles (`libambientsynth`)
+### 2.1 Core C++20 Engine Design Principles (`libhumspansynth`)
 * **Strict Real-Time Thread Safety:** Inside the `renderBlock(float* outputBuffer, int32_t numFrames)` audio callback, enforce zero heap allocations (`new`/`malloc`), zero mutexes/locks, zero file/network I/O, and zero C++ exceptions.
 * **Lock-Free UI-to-Audio Communication:** Use a Single-Producer Single-Consumer (SPSC) lock-free ring buffer (e.g., `moodycamel::ReaderWriterQueue`) for discrete commands (load audio stem, start/stop timer) and `std::atomic<float>` with parameter smoothing (one-pole low-pass) for continuous sliders (volume, filter cutoff, stereo pan) to prevent zipper noise.
 * **SIMD Optimization:** Utilize ARM NEON (mobile/Apple Silicon) and x86 SSE/AVX intrinsics (or a lightweight SIMD wrapper like `xsimd`) for multi-stem mixing, equal-power crossfades, and biquad filter banks to maximize overnight battery life.
 * **Denormal Safety:** Set flush-to-zero / denormals-are-zero (FTZ/DAZ) on the render thread at the start of every callback. IIR filters, the brown-noise integrator and fade-outs all decay towards zero, and denormal arithmetic causes CPU spikes on x86 exactly during the overnight tail.
-* **Master Bus Protection:** Every generator is normalised to a common loudness target (e.g. $-23$ LUFS integrated) at authoring time, and the summed mix passes through a soft limiter before output, so stacking four layers at full volume can never clip. The session screen sets the engine to full scale and uses the device volume as the only loudness control. White and pink share one level; brown sits about 9 dB above that so it matches them by ear and stays clean on a phone speaker. `ambient_play` still defaults to 0.5.
+* **Master Bus Protection:** Every generator is normalised to a common loudness target (e.g. $-23$ LUFS integrated) at authoring time, and the summed mix passes through a soft limiter before output, so stacking four layers at full volume can never clip. The session screen sets the engine to full scale and uses the device volume as the only loudness control. White and pink share one level; brown sits about 9 dB above that so it matches them by ear and stays clean on a phone speaker. `humspan_play` still defaults to 0.5.
 * **Lightweight Audio & FFT Dependencies:**
   * **Audio Decoding:** Single-header `dr_wav` and `dr_flac` libraries for zero-dependency PCM/FLAC decoding on a background worker thread.
   * **Spectral Analysis:** `PFFFT` or `KissFFT` (C/C++) for fast offline Short-Time Fourier Transform (STFT) seam detection.
 
 ### 2.2 Platform Hardware Abstraction Layer (HAL)
-Each platform hosts a thin native wrapper that opens the hardware audio stream and invokes `ambient_engine_render(...)` on the OS real-time audio thread.
+Each platform hosts a thin native wrapper that opens the hardware audio stream and invokes `humspan_engine_render(...)` on the OS real-time audio thread.
 
 **Revision:** `miniaudio` already supports CoreAudio (iOS/macOS) and AAudio/OpenSL (Android), so the default is **one miniaudio-based device layer everywhere**. Platform-native code is limited to what miniaudio does not do: the iOS `AVAudioSession` category/interruption handling and the Android foreground service and audio focus. The AVAudioEngine and Oboe paths below are fallbacks if miniaudio shows problems on a specific device.
 
 * **iOS & macOS:** Objective-C++ wrapper (`AudioBridge.mm`) using `AVAudioEngine` with an `AVAudioSourceNode` render block, integrated with `AVAudioSessionCategoryPlayback` for lock-screen background execution.
 * **Android:** Native C++ integration using **Google Oboe** (backed by `AAudio` on modern Android devices), completely bypassing the JVM and garbage collector during audio rendering.
 * **Desktop (Windows / Linux):** Single-header `miniaudio` C/C++ backend targeting WASAPI (Windows) and ALSA/PulseAudio (Linux).
-* **Web / PWA (Optional Demo or Companion):** Compile `libambientsynth` to **WebAssembly (WASM)** via Emscripten and execute inside a Web Audio `AudioWorkletProcessor`.
+* **Web / PWA (Optional Demo or Companion):** Compile `libhumspansynth` to **WebAssembly (WASM)** via Emscripten and execute inside a Web Audio `AudioWorkletProcessor`.
 
 ### 2.3 C ABI & UI Layer Strategy
-* Expose a clean `extern "C"` interface (`ambient_engine.h`) so any UI framework can bind to the C++ core without complex marshaling:
+* Expose a clean `extern "C"` interface (`humspan_engine.h`) so any UI framework can bind to the C++ core without complex marshaling:
   * **Recommended UI Stack:** **Flutter** (using `dart:ffi` for direct zero-overhead calls into C++) or **React Native** (using C++ JSI TurboModules). Both allow sharing a single UI codebase across iOS and Android while keeping $100\%$ of audio processing in native C++.
   * **Alternative All-C++ Option:** **JUCE** can be used if you also plan to release desktop audio plugins (VST3/AU), though a custom C++20 core paired with Flutter/Native UI yields a smaller binary size, modern mobile animations, and lower idle power draw.
 
 ### 2.4 Proposed Monorepo Structure
 ```text
-/ambient-sound-app
+/humspan
   /core-cpp                  # Platform-agnostic C++20 DSP library
-    /include/ambient_engine.h  # Public C ABI header
+    /include/humspan_engine.h  # Public C ABI header
     /src/dsp/                  # Noise, oscillators, biquads, granular, crossfader
     /src/analysis/             # STFT spectral seam detector
     /src/engine/               # Master sample clock, voice mixer, lock-free queues
@@ -202,7 +202,7 @@ Abruptly stopping ambient noise triggers an auditory startle/arousal response in
 The first draft fit a C++ core, four platform drivers, granular synthesis, an STFT analyser, a Flutter UI and a 15-soundscape library into 14 weeks. That is not realistic, and the sound library alone is a sound-design project. Each phase below ends in something shippable.
 
 ### Phase 1: Procedural Core & Desktop Harness
-* CMake project for `libambientsynth`, the flat C ABI, and a `miniaudio` desktop player.
+* CMake project for `libhumspansynth`, the flat C ABI, and a `miniaudio` desktop player.
 * White/pink/brown noise, smoothed parameters, master limiter, FTZ/DAZ, time-based timer with S-curve fade-in and raised-cosine fade-out.
 * Unit tests (spectral slope, timer accuracy, determinism, fade-out ends in silence) in CI.
 * **Milestone:** 8+ hours of glitch-free procedural audio on desktop, $< 2\%$ of one core, no render-thread allocations.

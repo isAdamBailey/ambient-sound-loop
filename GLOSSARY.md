@@ -1,4 +1,4 @@
-# Ambient Sound Loop
+# Humspan
 
 The shared language for a procedural listening session, shown the same way on every platform.
 

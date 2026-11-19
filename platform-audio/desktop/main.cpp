@@ -1,6 +1,6 @@
-// ambient_play — miniaudio desktop harness for libambientsynth.
+// humspan_play — miniaudio desktop harness for libhumspansynth.
 //
-//   ambient_play [--color white|pink|brown] [--duration 1h37m] [--fade-in 5]
+//   humspan_play [--color white|pink|brown] [--duration 1h37m] [--fade-in 5]
 //                [--fade-out 60] [--volume 0.5]
 //
 // Durations accept plain seconds ("90", "2.5") or h/m/s units ("1h37m15s").
@@ -11,7 +11,7 @@
 #define MA_NO_GENERATION
 #include "miniaudio.h"
 
-#include "ambient_engine.h"
+#include "humspan_engine.h"
 
 #include <atomic>
 #include <chrono>
@@ -46,13 +46,13 @@ bool parseDuration(const char* text, double& seconds) {
 
 void usage() {
     std::fprintf(stderr,
-                 "usage: ambient_play [--color white|pink|brown] [--duration 1h37m]\n"
+                 "usage: humspan_play [--color white|pink|brown] [--duration 1h37m]\n"
                  "                    [--fade-in SECONDS] [--fade-out SECONDS] [--volume 0..1]\n");
 }
 
 void dataCallback(ma_device* device, void* output, const void*, ma_uint32 frames) {
-    auto* engine = static_cast<ambient_engine*>(device->pUserData);
-    ambient_engine_render(engine, static_cast<float*>(output), static_cast<int32_t>(frames));
+    auto* engine = static_cast<humspan_engine*>(device->pUserData);
+    humspan_engine_render(engine, static_cast<float*>(output), static_cast<int32_t>(frames));
 }
 
 std::string clock(double seconds) {
@@ -65,7 +65,7 @@ std::string clock(double seconds) {
 } // namespace
 
 int main(int argc, char** argv) {
-    ambient_noise_color color = AMBIENT_NOISE_PINK;
+    humspan_noise_color color = HUMSPAN_NOISE_PINK;
     double duration = 0.0, fadeIn = 5.0, fadeOut = 60.0;
     float volume = 0.5f;
 
@@ -79,9 +79,9 @@ int main(int argc, char** argv) {
         };
         if (arg == "--color") {
             const std::string c = need();
-            if (c == "white") color = AMBIENT_NOISE_WHITE;
-            else if (c == "pink") color = AMBIENT_NOISE_PINK;
-            else if (c == "brown" || c == "red") color = AMBIENT_NOISE_BROWN;
+            if (c == "white") color = HUMSPAN_NOISE_WHITE;
+            else if (c == "pink") color = HUMSPAN_NOISE_PINK;
+            else if (c == "brown" || c == "red") color = HUMSPAN_NOISE_BROWN;
             else { usage(); return 2; }
         } else if (arg == "--duration" || arg == "--fade-in" || arg == "--fade-out") {
             double seconds;
@@ -108,17 +108,17 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "could not open an audio device\n");
         return 1;
     }
-    ambient_engine* engine = ambient_engine_create(device.sampleRate, static_cast<uint64_t>(std::time(nullptr)));
+    humspan_engine* engine = humspan_engine_create(device.sampleRate, static_cast<uint64_t>(std::time(nullptr)));
     device.pUserData = engine;
 
-    ambient_engine_set_noise_color(engine, color);
-    ambient_engine_set_volume(engine, volume);
-    ambient_engine_start(engine, duration, fadeIn, fadeOut);
+    humspan_engine_set_noise_color(engine, color);
+    humspan_engine_set_volume(engine, volume);
+    humspan_engine_start(engine, duration, fadeIn, fadeOut);
 
     if (ma_device_start(&device) != MA_SUCCESS) {
         std::fprintf(stderr, "could not start the audio device\n");
         ma_device_uninit(&device);
-        ambient_engine_destroy(engine);
+        humspan_engine_destroy(engine);
         return 1;
     }
 
@@ -137,13 +137,13 @@ int main(int argc, char** argv) {
     bool stopSent = false;
     // Give the audio thread a moment to pick up the start command.
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    while (ambient_engine_is_playing(engine)) {
+    while (humspan_engine_is_playing(engine)) {
         if (enterPressed && !stopSent) {
-            ambient_engine_stop(engine, 3.0);
+            humspan_engine_stop(engine, 3.0);
             stopSent = true;
             std::printf("\nFading out...\n");
         }
-        const double elapsed = ambient_engine_elapsed_seconds(engine);
+        const double elapsed = humspan_engine_elapsed_seconds(engine);
         if (duration > 0) {
             std::printf("\r%s remaining ", clock(duration - elapsed).c_str());
         } else {
@@ -156,6 +156,6 @@ int main(int argc, char** argv) {
 
     // Session over: release the device so the machine can idle.
     ma_device_uninit(&device);
-    ambient_engine_destroy(engine);
+    humspan_engine_destroy(engine);
     return 0;
 }
