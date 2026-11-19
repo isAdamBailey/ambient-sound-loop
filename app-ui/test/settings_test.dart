@@ -84,9 +84,10 @@ void main() {
   });
 
   group('level taper', () {
-    test('100 % is 0 dB and 0 is silence', () {
+    test('100 % is 0 dB and the bottom is -40 dB, never silence', () {
       expect(levelGain(1), 1.0);
-      expect(levelGain(0), 0.0);
+      expect(levelGain(0), closeTo(0.01, 1e-12));
+      expect(levelGain(-1), closeTo(0.01, 1e-12));
     });
 
     test('even dB steps down to -40 dB', () {
@@ -94,6 +95,7 @@ void main() {
       expect(db(0.5), closeTo(-20, 1e-9));
       expect(db(0.75), closeTo(-10, 1e-9));
       expect(db(0.01), closeTo(-39.6, 1e-9));
+      expect(db(0), closeTo(-40, 1e-9));
     });
 
     test('never raises a layer above its reference level', () {

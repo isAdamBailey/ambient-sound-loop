@@ -141,14 +141,14 @@ class SessionSettings {
       'boom ${boomOn ? 'on' : 'off'} ${boomSeconds}s $boomLevel)';
 }
 
-/// The bottom of a level slider's dB taper, just above silence.
+/// The bottom of a level slider's dB taper: quiet, never silent. Only a
+/// layer's toggle turns it off.
 const levelFloorDb = -40.0;
 
 /// Engine gain for a level slider at [position] (0–1): 100 % is 0 dB, the
-/// steps are even in dB down to [levelFloorDb], and 0 is silence.
+/// steps are even in dB down to [levelFloorDb] at 0.
 double levelGain(double position) {
-  if (position <= 0) return 0;
-  final p = position >= 1 ? 1.0 : position;
+  final p = position.clamp(0.0, 1.0);
   return math.pow(10, levelFloorDb * (1 - p) / 20).toDouble();
 }
 

@@ -399,7 +399,7 @@ void main() {
     make(settings: SessionSettings.firstLaunch.copyWith(
         noiseOn: false, binauralOn: true, noiseLevel: 0.5, binauralLevel: 0, boomLevel: 0.75));
     expect(audio.calls, containsAll([
-      'noise false', 'binaural true', 'noise-level ${levelGain(0.5)}', 'binaural-level 0.0',
+      'noise false', 'binaural true', 'noise-level ${levelGain(0.5)}', 'binaural-level ${levelGain(0)}',
       'boom-level ${levelGain(0.75)}',
     ]));
   });
@@ -431,7 +431,7 @@ void main() {
       c.dispose();
     });
 
-    test('a level of 0 still counts as on for Play', () {
+    test('a slider at its bottom is quiet, not off: Play stays available', () {
       final c = make();
       c.setLevel(SoundLayer.noise, 0);
       expect(c.canPlay, isTrue);
@@ -468,7 +468,7 @@ void main() {
       expect(audio.calls, [
         'noise-level ${levelGain(0.5)}',
         'binaural-level ${levelGain(0.75)}',
-        'boom-level 0.0',
+        'boom-level ${levelGain(0)}',
       ]);
       expect(levelGain(0.5), closeTo(0.1, 1e-12)); // -20 dB
       expect(c.settings.noiseLevel, 0.5);
