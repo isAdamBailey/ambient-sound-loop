@@ -185,6 +185,17 @@ external void humspan_engine_set_sample_rate(
   int sample_rate,
 );
 
+/// Tell the engine whether the output is a built-in phone or tablet speaker.
+/// Such a speaker cannot play the boom's deep tones and only buzzes on them,
+/// so it gets a voicing built from higher harmonics with the same pitch.
+/// Headphones and external speakers keep the deep boom. Smoothed, so a route
+/// change never clicks. Off (deep) by default. Control thread (atomic).
+@ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Int)>()
+external void humspan_engine_set_speaker_output(
+  ffi.Pointer<humspan_engine> engine,
+  int speaker,
+);
+
 @ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Float)>()
 external void humspan_engine_set_volume(
   ffi.Pointer<humspan_engine> engine,

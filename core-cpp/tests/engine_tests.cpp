@@ -423,10 +423,22 @@ static void testBoomAlternatesEars() {
           "the next strike is in the right ear");
 
     const size_t toneEnd = size_t(0.4 * kRate);
-    const double low = toneAmplitude(diff, 0, 52, size_t(0.05 * kRate), toneEnd);
-    const double octave = toneAmplitude(diff, 0, 104, size_t(0.05 * kRate), toneEnd);
-    CHECK(low > 0.12, "the strike rings at 52 Hz (amplitude %.3f)", low);
-    CHECK(octave > 0.08, "the octave is loud enough to hear (amplitude %.3f)", octave);
+    const double low = toneAmplitude(diff, 0, 44, size_t(0.05 * kRate), toneEnd);
+    const double octave = toneAmplitude(diff, 0, 88, size_t(0.05 * kRate), toneEnd);
+    CHECK(low > 0.10, "the strike rings at 44 Hz (amplitude %.3f)", low);
+    CHECK(octave > 0.05, "the octave is loud enough to hear (amplitude %.3f)", octave);
+
+    // A struck attack: most of the strike's peak arrives in the first 15 ms.
+    float early = 0, strikePeak = 0;
+    for (size_t i = 0; i < size_t(0.5 * kRate); ++i) {
+        const float s = std::fabs(diff[i * 2]);
+        strikePeak = std::max(strikePeak, s);
+        if (i < size_t(0.015 * kRate)) early = std::max(early, s);
+    }
+    CHECK(early > 0.6f * strikePeak, "the strike lands within 15 ms (%.3f of %.3f)", early, strikePeak);
+    // Headroom: a strike leaves room for white or pink noise under the
+    // clipper's knee.
+    CHECK(strikePeak < 0.5f, "the strike peaks at %.3f", strikePeak);
 
     const double want = kBedRms * 0.5 * std::numbers::sqrt2;
     const double leftBeat = toneAmplitude(b, 0, 180, kRate, 2 * kRate);
@@ -442,6 +454,61 @@ static void testBoomAlternatesEars() {
     }
     leftover = std::sqrt(leftover / double(gone.size() / 2));
     CHECK(leftover < 0.01, "switching the boom off fades it out (residual %.4f)", leftover);
+}
+
+static void testBoomRetriggerIsSmooth() {
+    std::printf("a strike over a ringing tail does not click\n");
+    // At the shortest gap each ear is struck again while still ringing. A
+    // click shows as a sample-to-sample jump far above the tone's slope.
+    Engine eng(kRate, 3);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_set_noise(eng.e, 0);
+    humspan_engine_set_boom(eng.e, 1);
+    humspan_engine_set_boom_interval(eng.e, 1.0f);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
+    const auto x = render(eng.e, kRate * 6);
+    float jump = 0;
+    for (size_t i = 2; i < x.size(); ++i) jump = std::max(jump, std::fabs(x[i] - x[i - 2]));
+    CHECK(jump < 0.01f, "largest sample step %.4f", jump);
+}
+
+static void testSpeakerBoomStaysAboveTheSpeakerFloor() {
+    std::printf("on a phone speaker the boom keeps its pitch from 220 Hz up\n");
+    auto boomOnly = [](bool speaker) {
+        Engine eng(kRate, 5);
+        humspan_engine_set_volume(eng.e, 1.0f);
+        humspan_engine_set_noise(eng.e, 0);
+        humspan_engine_set_boom(eng.e, 1);
+        humspan_engine_set_boom_interval(eng.e, 4.0f);
+        humspan_engine_set_speaker_output(eng.e, speaker ? 1 : 0);
+        humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
+        return render(eng.e, kRate * 4);
+    };
+    const auto deep = boomOnly(false);
+    const auto small = boomOnly(true);
+    const size_t from = size_t(0.05 * kRate), to = size_t(0.5 * kRate);
+    const double strike = rms(small, from, to);
+    CHECK(strike > 0.02, "the speaker boom sounds (rms %.4f)", strike);
+    for (double hz : {44.0, 88.0, 132.0}) {
+        const double a = toneAmplitude(small, 0, hz, from, to);
+        CHECK(a < 0.01, "speaker boom keeps %.0f Hz out (amplitude %.4f)", hz, a);
+    }
+    CHECK(toneAmplitude(small, 0, 220, from, to) > 0.03, "speaker boom rings at 220 Hz");
+    CHECK(toneAmplitude(deep, 0, 220, from, to) < 0.01, "the deep boom is unchanged");
+
+    // A route change mid-strike crossfades: no step larger than the tone's own.
+    Engine eng(kRate, 5);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_set_noise(eng.e, 0);
+    humspan_engine_set_boom(eng.e, 1);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
+    auto x = render(eng.e, kRate / 10);
+    humspan_engine_set_speaker_output(eng.e, 1);
+    const auto y = render(eng.e, kRate / 2);
+    x.insert(x.end(), y.begin(), y.end());
+    float jump = 0;
+    for (size_t i = size_t(0.05 * kRate) * 2; i < x.size(); ++i) jump = std::max(jump, std::fabs(x[i] - x[i - 2]));
+    CHECK(jump < 0.03f, "switching to the speaker voicing steps at most %.4f", jump);
 }
 
 // A started, settled engine at full volume with the given layers.
@@ -701,6 +768,7 @@ static void testRenderDoesNotAllocate() {
         if (i == 100) humspan_engine_set_binaural(eng.e, 1);
         if (i == 150) humspan_engine_set_boom(eng.e, 1);
         if (i % 280 == 0) humspan_engine_set_boom_interval(eng.e, float(2 + (i / 280) % 3 * 2));
+        if (i % 320 == 0) humspan_engine_set_speaker_output(eng.e, i / 320 % 2);
         if (i == 1300) humspan_engine_set_boom(eng.e, 0);
         if (i % 250 == 0) humspan_engine_set_beat_frequency(eng.e, float(2 + i / 250 % 5 * 2));
         if (i == 400) humspan_engine_set_duck_gain(eng.e, 0.3f);
@@ -740,6 +808,8 @@ int main() {
     testDuckLowersLevelAndKeepsClock();
     testBinauralBeatToneAndLevel();
     testBoomAlternatesEars();
+    testBoomRetriggerIsSmooth();
+    testSpeakerBoomStaysAboveTheSpeakerFloor();
     testEachLayerAlone();
     testNoiseToggleKeepsColorAndFades();
     testLayerLevels();

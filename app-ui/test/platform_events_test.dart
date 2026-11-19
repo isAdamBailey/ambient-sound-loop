@@ -38,4 +38,24 @@ void main() {
     expect(controller.phase, SessionPhase.stopped);
     controller.dispose();
   });
+
+  test('the output route sets the boom voicing, playing or not', () {
+    final audio = FakeAudio();
+    final controller = SessionController(
+      audio: audio,
+      settings: SessionSettings.firstLaunch,
+      reroute: RerouteBehavior.ignore,
+      onSettingsChanged: (_) {},
+    );
+    audio.calls.clear();
+
+    applySessionEvent(controller, 'outputRoute', true);
+    expect(audio.calls, ['speaker true']);
+    applySessionEvent(controller, 'outputRoute', false);
+    expect(audio.calls.last, 'speaker false');
+    applySessionEvent(controller, 'outputRoute');
+    expect(audio.calls, hasLength(2));
+    expect(controller.phase, SessionPhase.stopped);
+    controller.dispose();
+  });
 }
