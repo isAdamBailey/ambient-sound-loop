@@ -91,7 +91,7 @@ external void humspan_engine_set_beat_frequency(
 
 /// Binaural beat: a stereo tone layer on top of the noise, a fixed 180 Hz
 /// carrier in the left channel and 180 Hz + beat in the right. It follows the
-/// session volume and envelope and sits 6 dB under the noise. Switching it on
+/// session volume and envelope and sits 6 dB under white and pink. Switching it on
 /// or off is smoothed; changing the beat keeps phase, so neither clicks. Off by
 /// default, beat 4 Hz. Control thread (atomics).
 @ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Int)>()
