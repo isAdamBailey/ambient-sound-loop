@@ -18,11 +18,11 @@ void main() {
     });
   });
 
-  test('presets are the spec list, in order', () {
+  test("the dial's preset stops, in order", () {
     expect(lengthPresets.map((p) => p.label), [
-      '30 min', '1 h', '1h 30m', '2 h', '8 h', 'Until I stop',
+      '30m', '1h', '2h', '4h', '8h', 'Until I stop',
     ]);
-    expect(lengthPresets[2].length, SessionLength.timed(const Duration(minutes: 90)));
+    expect(lengthPresets[3].length, SessionLength.timed(const Duration(hours: 4)));
     expect(lengthPresets.last.length, SessionLength.untilStop);
   });
 

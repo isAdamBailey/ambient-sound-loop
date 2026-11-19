@@ -1,5 +1,5 @@
-/// Session length: a timed length or Until I stop, the picker's presets, and
-/// exact entry by keypad (narrow) or fields (wide). Spec #9 §4.
+/// Session length: a timed length or Until I stop, the dial's preset stops,
+/// and exact entry by keypad (narrow) or fields (wide). Spec #9 §4.
 library;
 
 import 'package:flutter/foundation.dart';
@@ -61,7 +61,10 @@ final class UntilStop extends SessionLength {
   int get hashCode => 0;
 }
 
-/// A preset chip in the length picker.
+/// The longest session the dial or exact entry can set.
+const maxSessionLength = Duration(hours: 99, minutes: 59, seconds: 59);
+
+/// A preset stop under the length dial.
 @immutable
 class LengthPreset {
   const LengthPreset(this.label, this.length);
@@ -70,11 +73,11 @@ class LengthPreset {
 }
 
 const lengthPresets = <LengthPreset>[
-  LengthPreset('30 min', TimedLength(Duration(minutes: 30))),
-  LengthPreset('1 h', TimedLength(Duration(hours: 1))),
-  LengthPreset('1h 30m', TimedLength(Duration(minutes: 90))),
-  LengthPreset('2 h', TimedLength(Duration(hours: 2))),
-  LengthPreset('8 h', TimedLength(Duration(hours: 8))),
+  LengthPreset('30m', TimedLength(Duration(minutes: 30))),
+  LengthPreset('1h', TimedLength(Duration(hours: 1))),
+  LengthPreset('2h', TimedLength(Duration(hours: 2))),
+  LengthPreset('4h', TimedLength(Duration(hours: 4))),
+  LengthPreset('8h', TimedLength(Duration(hours: 8))),
   LengthPreset('Until I stop', UntilStop()),
 ];
 

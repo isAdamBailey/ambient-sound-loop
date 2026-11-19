@@ -25,6 +25,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   fonts:
-    - family: Inter
+    - family: Atkinson Hyperlegible Next
       fonts:
-        - asset: assets/fonts/InterVariable.ttf
+        - asset: assets/fonts/AtkinsonHyperlegibleNext.ttf
+    - family: Atkinson Hyperlegible Mono
+      fonts:
+        - asset: assets/fonts/AtkinsonHyperlegibleMono.ttf
