@@ -81,11 +81,7 @@ class _SessionAppState extends State<SessionApp> {
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: SessionColors.background,
-        fontFamily: 'Inter',
-      ),
+      theme: sessionTheme(),
       home: SessionScreen(controller: widget.controller),
     );
   }
@@ -99,8 +95,9 @@ class _AudioFailedApp extends StatelessWidget {
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
+      theme: sessionTheme(),
       home: Scaffold(
-        backgroundColor: SessionColors.background,
+        backgroundColor: SessionColors.ground,
         body: Center(child: Text('Audio is unavailable on this device.', style: SessionText.body)),
       ),
     );

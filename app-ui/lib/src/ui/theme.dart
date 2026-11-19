@@ -1,58 +1,74 @@
-/// The session screen's look: true black, muted blues, Inter. Spec #9 §8.
+/// The session screen's look: near-black ground, parchment ink, one sea-blue
+/// for measured quantities, amber only for state changes. Atkinson
+/// Hyperlegible Next for words, its Mono for figures.
 library;
-
 
 import 'package:material_ui/material_ui.dart';
 
 abstract final class SessionColors {
-  static const background = Color(0xFF000000);
-  static const primary = Color(0xFF8FB3D9); // marks, text, selected fill
-  static const secondary = Color(0xFF5E7FA3); // secondary text (5.0:1 on black)
-  static const border = Color(0xFF1E2B3A);
-  static const surface = Color(0xFF0A0F15); // raised surfaces
-  static const sheet = Color(0xFF05080C); // the narrow length sheet
+  static const ground = Color(0xFF05090D); // the screen
+  static const ink = Color(0xFFD6CCB2); // text, marks, the Play fill (12:1)
+  static const dim = Color(0xFF8C8676); // secondary text, off and locked controls (5.4:1)
+  static const rule = Color(0xFF1A232B); // hairlines, slider and dial tracks
+  static const sea = Color(0xFF4F7F95); // measured amounts: the length arc, level fills
+  static const seaDeep = Color(0xFF1D3A4A); // focus and press washes
+  static const seaWash = Color(0x331D3A4A); // seaDeep at 20 %: slider overlay, highlight
+  static const state = Color(0xFFE0A85C); // state changes only (Paused)
+  static const raised = Color(0xFF0B1117); // the exact-length sheet
 }
 
 abstract final class SessionText {
-  static TextStyle weight(double size, int weight, {Color color = SessionColors.primary}) => TextStyle(
-    fontFamily: 'Inter',
-    fontSize: size,
-    fontWeight: FontWeight.values[(weight ~/ 100) - 1],
-    fontVariations: [FontVariation.weight(weight.toDouble())],
-    color: color,
-  );
+  static const sans = 'Atkinson Hyperlegible Next';
+  static const mono = 'Atkinson Hyperlegible Mono';
 
-  /// The clock: weight 200, tabular figures.
-  static TextStyle clock(double size, {required bool dimmed}) => weight(
-    size,
-    200,
-    color: dimmed ? SessionColors.secondary : SessionColors.primary,
-  ).copyWith(height: 1, letterSpacing: -0.02 * size, fontFeatures: const [FontFeature.tabularFigures()]);
+  static TextStyle weight(double size, int weight, {Color color = SessionColors.ink, String family = sans}) =>
+      TextStyle(
+        fontFamily: family,
+        fontSize: size,
+        fontWeight: FontWeight.values[(weight ~/ 100) - 1],
+        fontVariations: [FontVariation.weight(weight.toDouble())],
+        color: color,
+        height: 1.25,
+      );
 
-  /// Block labels: uppercase, 12–13 px, tracked.
-  static TextStyle label({double size = 13}) =>
-      weight(size, 400, color: SessionColors.secondary).copyWith(letterSpacing: 0.06 * size);
+  /// Figures: durations, frequencies, percentages, times.
+  static TextStyle figures(double size, {int w = 400, Color color = SessionColors.ink}) =>
+      weight(size, w, color: color, family: mono).copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
 
-  static final body = weight(15, 400, color: SessionColors.secondary);
-  static final control = weight(16, 500);
-  static final tabular = weight(15, 400).copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
+  /// The clock in the dial's center.
+  static TextStyle clock(double size, {required bool dimmed}) =>
+      figures(size, w: 200, color: dimmed ? SessionColors.dim : SessionColors.ink)
+          .copyWith(height: 1, letterSpacing: -0.02 * size);
+
+  /// Layer headings: uppercase, tracked.
+  static TextStyle label({double size = 12, Color color = SessionColors.dim}) =>
+      weight(size, 500, color: color).copyWith(letterSpacing: 0.08 * size);
+
+  static final body = weight(15, 400, color: SessionColors.dim);
+  static final note = weight(14, 400, color: SessionColors.dim).copyWith(height: 1.4);
 }
 
 ThemeData sessionTheme() {
   const scheme = ColorScheme.dark(
-    primary: SessionColors.primary,
-    onPrimary: SessionColors.background,
-    secondary: SessionColors.secondary,
-    onSecondary: SessionColors.background,
-    surface: SessionColors.background,
-    onSurface: SessionColors.primary,
-    outline: SessionColors.border,
+    primary: SessionColors.ink,
+    onPrimary: SessionColors.ground,
+    secondary: SessionColors.sea,
+    onSecondary: SessionColors.ground,
+    surface: SessionColors.ground,
+    onSurface: SessionColors.ink,
+    outline: SessionColors.rule,
   );
   return ThemeData(
     colorScheme: scheme,
-    scaffoldBackgroundColor: SessionColors.background,
-    fontFamily: 'Inter',
-    textSelectionTheme: const TextSelectionThemeData(cursorColor: SessionColors.primary),
-    focusColor: const Color(0x338FB3D9),
+    scaffoldBackgroundColor: SessionColors.ground,
+    fontFamily: SessionText.sans,
+    splashFactory: NoSplash.splashFactory,
+    textSelectionTheme: const TextSelectionThemeData(
+      cursorColor: SessionColors.ink,
+      selectionColor: SessionColors.seaDeep,
+      selectionHandleColor: SessionColors.ink,
+    ),
+    focusColor: SessionColors.seaDeep,
+    highlightColor: SessionColors.seaWash,
   );
 }

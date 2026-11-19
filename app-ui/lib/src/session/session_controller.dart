@@ -106,15 +106,16 @@ class SessionController extends ChangeNotifier {
   SessionPhase get phase => _phase;
 
   /// The length shown and used while a session runs; else the chosen one.
-  SessionLength get _shownLength =>
+  SessionLength get shownLength =>
       _phase == SessionPhase.stopped ? _settings.length : (_sessionLength ?? _settings.length);
 
   /// `H:MM:SS`: remaining for a timed session, elapsed for Until I stop; when
   /// stopped, the chosen length (or 0:00:00 for Until I stop).
-  String get clockText => formatClock(_clockSeconds);
+  String get clockText => formatClock(clockSeconds);
 
-  int get _clockSeconds {
-    final length = _shownLength;
+  /// The clock's value in seconds, as [clockText] shows it.
+  int get clockSeconds {
+    final length = shownLength;
     if (_phase == SessionPhase.stopped || !_sawPlaying) {
       return length.duration?.inSeconds ?? 0;
     }
@@ -122,15 +123,16 @@ class SessionController extends ChangeNotifier {
     return math.max(0, _audio.remainingSeconds.ceil());
   }
 
-  String get clockCaption => switch ((_phase, _shownLength)) {
+  String get clockCaption => switch ((_phase, shownLength)) {
     (SessionPhase.stopped, UntilStop()) => 'until you stop',
     (SessionPhase.stopped, _) => 'session length',
     (_, UntilStop()) => 'elapsed',
     _ => 'left',
   };
 
-  /// "Length applies next session." while one is running.
-  bool get showLengthNote => _phase != SessionPhase.stopped;
+  /// The length can be changed only while stopped; a running or paused
+  /// session keeps its own.
+  bool get lengthLocked => _phase != SessionPhase.stopped;
 
   /// The sound, for the system now-playing subtitle: the layers that are on,
   /// in the order noise · beat · boom, or "Silent" with every layer off.
@@ -288,10 +290,9 @@ class SessionController extends ChangeNotifier {
     _update(_settings.copyWith(binauralOn: on));
   }
 
-  /// The beat chip: the next frequency in [beatFrequencies], wrapping.
-  void nextBeat() {
-    final i = beatFrequencies.indexOf(_settings.beatHz);
-    final hz = beatFrequencies[(i + 1) % beatFrequencies.length];
+  /// The beat stepper: one of [beatFrequencies].
+  void setBeatHz(int hz) {
+    assert(beatFrequencies.contains(hz), 'not a beat frequency: $hz');
     _audio.setBeatFrequency(hz.toDouble());
     _update(_settings.copyWith(beatHz: hz));
   }
@@ -301,10 +302,9 @@ class SessionController extends ChangeNotifier {
     _update(_settings.copyWith(boomOn: on));
   }
 
-  /// The boom chip: the next gap in [boomIntervals], wrapping.
-  void nextBoom() {
-    final i = boomIntervals.indexOf(_settings.boomSeconds);
-    final seconds = boomIntervals[(i + 1) % boomIntervals.length];
+  /// The boom gap: one of [boomIntervals].
+  void setBoomSeconds(int seconds) {
+    assert(boomIntervals.contains(seconds), 'not a boom gap: $seconds');
     _audio.setBoomInterval(seconds.toDouble());
     _update(_settings.copyWith(boomSeconds: seconds));
   }

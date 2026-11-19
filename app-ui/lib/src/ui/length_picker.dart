@@ -1,16 +1,16 @@
-/// The length picker: a bottom sheet on narrow layouts, a dialog on wide ones.
-/// Nothing changes until Done; Cancel discards. Spec #9 §4.
+/// Exact length entry, opened from the dial: a keypad in a bottom sheet on
+/// narrow layouts, typed fields in a dialog on wide ones. Nothing changes until
+/// Done; Cancel discards. Spec #9 §4.
 library;
 
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../session/length.dart';
-import 'controls.dart';
 import 'theme.dart';
 
-/// Shows the picker and returns the chosen length, or null on Cancel.
-Future<SessionLength?> showLengthPicker(
+/// Shows exact entry and returns the length entered, or null on Cancel.
+Future<SessionLength?> showExactLength(
   BuildContext context, {
   required SessionLength current,
   required bool wide,
@@ -20,10 +20,10 @@ Future<SessionLength?> showLengthPicker(
       context: context,
       barrierColor: const Color(0xB3000000),
       builder: (_) => Dialog(
-        backgroundColor: SessionColors.surface,
+        backgroundColor: SessionColors.raised,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: SessionColors.border),
+          side: const BorderSide(color: SessionColors.rule),
         ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -36,11 +36,11 @@ Future<SessionLength?> showLengthPicker(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: SessionColors.sheet,
+    backgroundColor: SessionColors.raised,
     barrierColor: const Color(0xB3000000),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      side: BorderSide(color: SessionColors.border),
+      side: BorderSide(color: SessionColors.rule),
     ),
     builder: (_) => LengthPicker(current: current, wide: false),
   );
@@ -57,19 +57,16 @@ class LengthPicker extends StatefulWidget {
 }
 
 class _LengthPickerState extends State<LengthPicker> {
-  late SessionLength _preset; // the selected preset, when not exact
-  late bool _exact;
   late ExactEntry _entry;
   late final List<TextEditingController> _fields; // wide: hours, minutes, seconds
 
   @override
   void initState() {
     super.initState();
+    // A preset or Until I stop starts a fresh entry, like a phone timer.
     final current = widget.current;
     final isPreset = lengthPresets.any((p) => p.length == current);
-    _preset = isPreset ? current : lengthPresets.first.length;
-    _exact = !isPreset;
-    _entry = ExactEntry.of(current.duration ?? Duration.zero);
+    _entry = isPreset ? const ExactEntry.empty() : ExactEntry.of(current.duration ?? Duration.zero);
     _fields = [
       for (final v in [_entry.hours, _entry.minutes, _entry.seconds])
         TextEditingController(text: v.toString().padLeft(2, '0')),
@@ -84,29 +81,14 @@ class _LengthPickerState extends State<LengthPicker> {
     super.dispose();
   }
 
-  void _startExact() => setState(() {
-    if (!_exact) {
-      _entry = const ExactEntry.empty(); // a fresh entry, like a phone timer
-      _syncFields();
-    }
-    _exact = true;
-  });
-
-  void _syncFields() {
-    final values = [_entry.hours, _entry.minutes, _entry.seconds];
-    for (var i = 0; i < 3; i++) {
-      _fields[i].text = values[i].toString().padLeft(2, '0');
-    }
-  }
-
   void _done() {
-    if (_exact && !_entry.isValid) return; // refused; the sheet says why
-    Navigator.of(context).pop(_exact ? SessionLength.timed(_entry.duration) : _preset);
+    if (!_entry.isValid) return; // refused; the sheet says why
+    Navigator.of(context).pop(SessionLength.timed(_entry.duration));
   }
 
   @override
   Widget build(BuildContext context) {
-    final refused = _exact && !_entry.isValid;
+    final refused = !_entry.isValid;
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
@@ -117,26 +99,7 @@ class _LengthPickerState extends State<LengthPicker> {
           children: [
             _header(),
             const SizedBox(height: 16),
-            CellGrid(
-              columns: widget.wide ? 4 : 3,
-              children: [
-                for (final p in lengthPresets)
-                  ChoiceButton(
-                    label: p.label,
-                    fontSize: 15,
-                    selected: !_exact && _preset == p.length,
-                    onPressed: () => setState(() {
-                      _exact = false;
-                      _preset = p.length;
-                    }),
-                  ),
-                ChoiceButton(label: 'Exact…', fontSize: 15, selected: _exact, onPressed: _startExact),
-              ],
-            ),
-            if (_exact) ...[
-              const SizedBox(height: 16),
-              if (widget.wide) _fieldsRow() else ..._keypad(),
-            ],
+            if (widget.wide) _fieldsRow() else ..._keypad(),
             if (refused) ...[
               const SizedBox(height: 14),
               Semantics(
@@ -144,7 +107,7 @@ class _LengthPickerState extends State<LengthPicker> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    border: Border.all(color: SessionColors.border),
+                    border: Border.all(color: SessionColors.rule),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('Enter a length, or choose Until I stop.', style: SessionText.weight(14, 400)),
@@ -163,7 +126,7 @@ class _LengthPickerState extends State<LengthPicker> {
       style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
       child: Text(
         label,
-        style: SessionText.weight(16, strong ? 600 : 400, color: strong ? SessionColors.primary : SessionColors.secondary),
+        style: SessionText.weight(16, strong ? 600 : 400, color: strong ? SessionColors.ink : SessionColors.dim),
       ),
     );
     return Row(
@@ -182,21 +145,22 @@ class _LengthPickerState extends State<LengthPicker> {
 
   List<Widget> _keypad() {
     void press(ExactEntry Function(ExactEntry) f) => setState(() => _entry = f(_entry));
-    Widget key(String label, VoidCallback onPressed, {String? semanticLabel}) => TextButton(
+    Widget key(String label, VoidCallback onPressed, {String? semanticLabel, IconData? icon}) => TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
         minimumSize: const Size(44, 52),
-        backgroundColor: SessionColors.surface,
-        foregroundColor: SessionColors.primary,
+        backgroundColor: Colors.transparent,
+        overlayColor: SessionColors.seaDeep,
+        foregroundColor: SessionColors.ink,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: SessionColors.border),
+          side: const BorderSide(color: SessionColors.rule),
         ),
       ),
       child: Semantics(
         label: semanticLabel,
         excludeSemantics: semanticLabel != null,
-        child: Text(label, style: SessionText.weight(22, 400)),
+        child: icon != null ? Icon(icon, size: 22) : Text(label, style: SessionText.figures(22)),
       ),
     );
     return [
@@ -206,17 +170,17 @@ class _LengthPickerState extends State<LengthPicker> {
           fit: BoxFit.scaleDown,
           child: Text(
             _entry.readout,
-            style: SessionText.clock(34, dimmed: false).copyWith(letterSpacing: 0),
+            style: SessionText.clock(36, dimmed: false).copyWith(letterSpacing: 0),
           ),
         ),
       ),
       const SizedBox(height: 12),
-      CellGrid(
+      _CellGrid(
         columns: 3,
         children: [
           for (final k in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0'])
             key(k, () => press((e) => e.press(k))),
-          key('⌫', () => press((e) => e.backspace()), semanticLabel: 'Delete last digit'),
+          key('', () => press((e) => e.backspace()), semanticLabel: 'Delete last digit', icon: Icons.backspace_outlined),
         ],
       ),
     ];
@@ -229,20 +193,20 @@ class _LengthPickerState extends State<LengthPicker> {
         controller: _fields[index],
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(2)],
-        style: SessionText.weight(22, 400).copyWith(fontFeatures: SessionText.tabular.fontFeatures),
+        style: SessionText.figures(22),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: SessionText.label(size: 12),
+          labelStyle: SessionText.label(),
           floatingLabelBehavior: FloatingLabelBehavior.always,
           filled: true,
-          fillColor: SessionColors.surface,
+          fillColor: SessionColors.raised,
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: SessionColors.border),
+            borderSide: const BorderSide(color: SessionColors.rule),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: SessionColors.primary),
+            borderSide: const BorderSide(color: SessionColors.ink),
           ),
         ),
         onChanged: (text) => setState(() {
@@ -264,8 +228,32 @@ class _LengthPickerState extends State<LengthPicker> {
         field(0, 'Hours'),
         field(1, 'Minutes'),
         field(2, 'Seconds'),
-        Text('= $total', style: SessionText.weight(14, 400, color: SessionColors.secondary)),
+        Text('= $total', style: SessionText.weight(14, 400, color: SessionColors.dim)),
       ],
     );
+  }
+}
+
+/// Lays children out in rows of [columns] equal cells.
+class _CellGrid extends StatelessWidget {
+  const _CellGrid({required this.columns, required this.children});
+
+  final int columns;
+  final List<Widget> children;
+  static const gap = 8.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i += columns) {
+      final cells = <Widget>[];
+      for (var j = 0; j < columns; j++) {
+        if (j > 0) cells.add(SizedBox(width: gap));
+        cells.add(Expanded(child: i + j < children.length ? children[i + j] : const SizedBox()));
+      }
+      if (rows.isNotEmpty) rows.add(SizedBox(height: gap));
+      rows.add(IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: cells)));
+    }
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: rows);
   }
 }

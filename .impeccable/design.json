@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-18T00:00:00Z",
+  "title": "Design System: Humspan",
+  "extensions": {
+    "colorMeta": {
+      "ground": { "role": "neutral", "displayName": "Night Ground", "canonical": "#05090D", "tonalRamp": ["#20262D", "#32404D", "#43596F", "#577A9E", "#7E99B4", "#A8B8C7", "#CFD6DD", "#F0F2F4"] },
+      "ink": { "role": "primary", "displayName": "Parchment Ink", "canonical": "#D6CCB2", "tonalRamp": ["#2D291F", "#4D4632", "#706343", "#9F8B56", "#B4A57E", "#C8BFA8", "#DED9CF", "#F4F3F0"] },
+      "dim": { "role": "neutral", "displayName": "Faded Ink", "canonical": "#8C8676", "tonalRamp": ["#282724", "#44423C", "#605C53", "#857F70", "#A19D91", "#BCBAB3", "#D8D7D4", "#F3F2F2"] },
+      "rule": { "role": "neutral", "displayName": "Hairline", "canonical": "#1A232B", "tonalRamp": ["#21272C", "#35404B", "#475A6B", "#5D7C98", "#839AAF", "#ABB8C5", "#D0D7DC", "#F1F2F4"] },
+      "sea": { "role": "secondary", "displayName": "Night Sea", "canonical": "#4F7F95", "tonalRamp": ["#1F292D", "#32454D", "#436270", "#56889F", "#7DA3B5", "#A7BEC8", "#CFD9DE", "#F0F3F4"] },
+      "sea-deep": { "role": "secondary", "displayName": "Deep Sea", "canonical": "#1D3A4A", "tonalRamp": ["#20282D", "#32444D", "#43606F", "#57859E", "#7EA1B4", "#A8BCC7", "#CFD8DD", "#F0F3F4"] },
+      "sea-wash": { "role": "secondary", "displayName": "Sea Wash", "canonical": "#1D3A4A33" },
+      "state": { "role": "tertiary", "displayName": "Lamp Amber", "canonical": "#E0A85C", "tonalRamp": ["#352917", "#5E4421", "#8B6127", "#CC8729", "#D6A25C", "#DBBD94", "#E7D9C6", "#F6F3EE"] },
+      "raised": { "role": "neutral", "displayName": "Raised Night", "canonical": "#0B1117", "tonalRamp": ["#20262D", "#32404D", "#43596F", "#577A9E", "#7E99B4", "#A8B8C7", "#CFD6DD", "#F0F2F4"] }
+    },
+    "typographyMeta": {
+      "clock": { "displayName": "Clock", "purpose": "The clock in the dial, sized at 17% of the dial clamped to 30-52 px; the keypad readout at 36 px." },
+      "title": { "displayName": "Title", "purpose": "The exact-length sheet heading." },
+      "option": { "displayName": "Option", "purpose": "Word choices and sheet actions." },
+      "figures": { "displayName": "Figures", "purpose": "Preset stops, end times, percentages; every number is Mono with tabular figures." },
+      "body": { "displayName": "Body", "purpose": "Standalone messages." },
+      "note": { "displayName": "Note", "purpose": "Dial caption, ends line, the line beside Play." },
+      "label": { "displayName": "Layer Label", "purpose": "Uppercase layer headings, ink when on, faded when off." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "switch-slide", "value": "160ms cubic-bezier(0.33, 1, 0.68, 1)", "purpose": "Layer switch track and thumb (Curves.easeOutCubic)." },
+      { "name": "dial-drain", "value": "redraw once a minute", "purpose": "The locked dial arc shrinks toward 12 while a session runs; nothing else moves." }
+    ],
+    "breakpoints": [
+      { "name": "wide", "value": "900px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Play Button",
+      "kind": "button",
+      "refersTo": "play-button",
+      "description": "The screen's one solid shape; turns into a parchment ring with a stop glyph while playing.",
+      "html": "<button class=\"ds-play\" aria-label=\"Play\"><svg width=\"38\" height=\"38\" viewBox=\"0 0 24 24\"><path d=\"M8 5.5v13l10.5-6.5z\" fill=\"currentColor\" stroke=\"currentColor\" stroke-linejoin=\"round\" stroke-width=\"1.5\"/></svg></button>",
+      "css": ".ds-play { width: 68px; height: 68px; border-radius: 50%; border: none; background: #D6CCB2; color: #05090D; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; } .ds-play:hover { background: #E3DBC6; } .ds-play:focus-visible { outline: 2px solid #4F7F95; outline-offset: 3px; } .ds-play:active { background: #C8BFA8; }"
+    },
+    {
+      "name": "Play Button (playing)",
+      "kind": "button",
+      "refersTo": "play-button-playing",
+      "description": "While playing: a 1.5 px parchment ring with a stop glyph.",
+      "html": "<button class=\"ds-stop\" aria-label=\"Stop\"><svg width=\"30\" height=\"30\" viewBox=\"0 0 24 24\"><rect x=\"6\" y=\"6\" width=\"12\" height=\"12\" rx=\"2\" fill=\"currentColor\"/></svg></button>",
+      "css": ".ds-stop { width: 68px; height: 68px; border-radius: 50%; border: 1.5px solid #D6CCB2; background: transparent; color: #D6CCB2; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; } .ds-stop:hover, .ds-stop:active { background: #1D3A4A33; } .ds-stop:focus-visible { outline: 2px solid #4F7F95; outline-offset: 3px; }"
+    },
+    {
+      "name": "Layer Switch",
+      "kind": "custom",
+      "refersTo": "layer-switch-on",
+      "description": "A layer's on/off switch: 46 x 28 pill in a 56 x 44 target.",
+      "html": "<button class=\"ds-switch\" role=\"switch\" aria-checked=\"true\" aria-label=\"Noise\" onclick=\"this.setAttribute('aria-checked', this.getAttribute('aria-checked') !== 'true')\"><span class=\"ds-switch-track\"><span class=\"ds-switch-thumb\"></span></span></button>",
+      "css": ".ds-switch { width: 56px; height: 44px; background: none; border: none; padding: 0; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; } .ds-switch-track { width: 46px; height: 28px; box-sizing: border-box; padding: 4px; border-radius: 14px; border: 1.5px solid #8C8676; background: #05090D; display: flex; justify-content: flex-start; align-items: center; transition: background 160ms cubic-bezier(0.33,1,0.68,1), border-color 160ms cubic-bezier(0.33,1,0.68,1); } .ds-switch-thumb { width: 17px; height: 17px; border-radius: 50%; background: #8C8676; } .ds-switch[aria-checked=\"true\"] .ds-switch-track { background: #D6CCB2; border-color: #D6CCB2; justify-content: flex-end; } .ds-switch[aria-checked=\"true\"] .ds-switch-thumb { background: #05090D; } .ds-switch:focus-visible .ds-switch-track { outline: 2px solid #4F7F95; outline-offset: 2px; }"
+    },
+    {
+      "name": "Word Choice",
+      "kind": "chip",
+      "refersTo": "word-option-chosen",
+      "description": "One of a few: words in a row, the chosen one parchment with a 2 px underline.",
+      "html": "<div class=\"ds-words\"><button class=\"ds-word\">White</button><button class=\"ds-word\" aria-pressed=\"true\">Pink</button><button class=\"ds-word\">Brown</button></div>",
+      "css": ".ds-words { display: inline-flex; gap: 12px; background: #05090D; } .ds-word { min-width: 44px; min-height: 44px; padding: 4px 4px 0; background: none; border: none; border-radius: 8px; color: #8C8676; font: 400 16px/1.25 'Atkinson Hyperlegible Next', sans-serif; cursor: pointer; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; } .ds-word::after { content: ''; display: block; width: 28px; height: 2px; margin-top: 4px; background: transparent; } .ds-word[aria-pressed=\"true\"] { color: #D6CCB2; } .ds-word[aria-pressed=\"true\"]::after { background: #D6CCB2; } .ds-word:hover, .ds-word:active { background: #1D3A4A33; } .ds-word:focus-visible { background: #1D3A4A; outline: none; }"
+    },
+    {
+      "name": "Value Stepper",
+      "kind": "custom",
+      "refersTo": "stepper-button",
+      "description": "A value in a range moved with - and +; hairline rings, Mono value.",
+      "html": "<div class=\"ds-stepper\"><button class=\"ds-step\" aria-label=\"Lower beat frequency\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\"><path d=\"M6 12h12\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg></button><span class=\"ds-step-value\">4 Hz</span><button class=\"ds-step\" aria-label=\"Raise beat frequency\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\"><path d=\"M6 12h12M12 6v12\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg></button></div>",
+      "css": ".ds-stepper { display: inline-flex; align-items: center; background: #05090D; } .ds-step { width: 36px; height: 36px; margin: 4px; border-radius: 50%; border: 1.5px solid #8C8676; background: transparent; color: #D6CCB2; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; } .ds-step:hover, .ds-step:active { background: #1D3A4A33; } .ds-step:focus-visible { background: #1D3A4A; outline: none; } .ds-step:disabled { color: #8C8676; border-color: #1A232B; cursor: default; } .ds-step-value { width: 68px; text-align: center; color: #D6CCB2; font: 400 17px/1.25 'Atkinson Hyperlegible Mono', monospace; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Level Slider",
+      "kind": "input",
+      "refersTo": "level-slider",
+      "description": "A layer level: 2 px track, sea-blue fill, parchment thumb, percentage in Mono.",
+      "html": "<div class=\"ds-level\"><input class=\"ds-range\" type=\"range\" min=\"0\" max=\"100\" value=\"70\" aria-label=\"Noise level\" oninput=\"this.style.setProperty('--v', this.value + '%'); this.nextElementSibling.textContent = this.value + '%'\" style=\"--v:70%\"><span class=\"ds-level-pct\">70%</span></div>",
+      "css": ".ds-level { display: flex; align-items: center; width: 320px; height: 44px; background: #05090D; } .ds-range { flex: 1; -webkit-appearance: none; appearance: none; height: 2px; margin: 0 8px; background: linear-gradient(to right, #4F7F95 var(--v), #1A232B var(--v)); } .ds-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #D6CCB2; border: none; } .ds-range::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #D6CCB2; border: none; } .ds-range:hover::-webkit-slider-thumb, .ds-range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 14px #1D3A4A33; } .ds-range:focus-visible { outline: none; } .ds-level-pct { width: 48px; text-align: right; color: #8C8676; font: 400 13px/1.25 'Atkinson Hyperlegible Mono', monospace; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Length Dial",
+      "kind": "custom",
+      "refersTo": "length-dial",
+      "description": "Signature: a 12-hour face, sea arc for the length, parchment handle, clock and end time in the centre.",
+      "html": "<div class=\"ds-dial\"><svg width=\"220\" height=\"220\" viewBox=\"0 0 220 220\"><circle cx=\"110\" cy=\"110\" r=\"96\" fill=\"none\" stroke=\"#1A232B\" stroke-width=\"10\"/><g stroke=\"#2A343C\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M110 26v12M194 110h-12M110 194v-12M26 110h12\"/></g><path d=\"M110 14 A96 96 0 0 1 193.1 158\" fill=\"none\" stroke=\"#4F7F95\" stroke-width=\"10\"/><circle cx=\"193.1\" cy=\"158\" r=\"11\" fill=\"#D6CCB2\"/><circle cx=\"193.1\" cy=\"158\" r=\"3\" fill=\"#05090D\"/></svg><div class=\"ds-dial-center\"><div class=\"ds-dial-clock\">4:00:00</div><div class=\"ds-dial-note\">session length</div><div class=\"ds-dial-note\">ends <span class=\"ds-mono\">2:30 AM</span></div><a class=\"ds-dial-exact\" href=\"#\">Exact</a></div></div>",
+      "css": ".ds-dial { position: relative; width: 220px; height: 220px; background: #05090D; } .ds-dial-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; } .ds-dial-clock { color: #D6CCB2; font: 200 38px/1 'Atkinson Hyperlegible Mono', monospace; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-bottom: 8px; } .ds-dial-note { color: #8C8676; font: 400 14px/1.3 'Atkinson Hyperlegible Next', sans-serif; } .ds-mono { font-family: 'Atkinson Hyperlegible Mono', monospace; } .ds-dial-exact { color: #D6CCB2; font: 500 14px/1.25 'Atkinson Hyperlegible Next', sans-serif; text-decoration: underline; text-decoration-color: #8C8676; padding: 12px 10px; border-radius: 8px; } .ds-dial-exact:hover { background: #1D3A4A33; } .ds-dial-exact:focus-visible { background: #1D3A4A; outline: none; }"
+    },
+    {
+      "name": "Layer Row",
+      "kind": "card",
+      "refersTo": "layer-row",
+      "description": "One sound layer: hairline rule, uppercase heading with switch, its own control, its level.",
+      "html": "<section class=\"ds-layer\"><div class=\"ds-layer-line\"><h3 class=\"ds-layer-label\">NOISE</h3><span class=\"ds-layer-switch\"></span></div><div class=\"ds-layer-line\"><span class=\"ds-layer-name\">Color</span><span class=\"ds-layer-value\">Pink</span></div></section>",
+      "css": ".ds-layer { width: 340px; border-top: 1px solid #1A232B; padding: 4px 0 2px; background: #05090D; } .ds-layer-line { height: 44px; display: flex; align-items: center; justify-content: space-between; } .ds-layer-label { margin: 0; color: #D6CCB2; font: 500 12px/1.25 'Atkinson Hyperlegible Next', sans-serif; letter-spacing: 0.08em; } .ds-layer-switch { width: 46px; height: 28px; border-radius: 14px; background: #D6CCB2; } .ds-layer-name { color: #8C8676; font: 400 14px/1.25 'Atkinson Hyperlegible Next', sans-serif; } .ds-layer-value { color: #D6CCB2; font: 400 16px/1.25 'Atkinson Hyperlegible Next', sans-serif; text-decoration: underline 2px; text-underline-offset: 6px; }"
+    },
+    {
+      "name": "Keypad Key",
+      "kind": "button",
+      "refersTo": "keypad-key",
+      "description": "Exact-length keypad key on the raised sheet: hairline outline, 14 px corners, Mono digit.",
+      "html": "<div class=\"ds-sheet\"><button class=\"ds-key\">7</button><button class=\"ds-key\">8</button><button class=\"ds-key\">9</button></div>",
+      "css": ".ds-sheet { display: grid; grid-template-columns: repeat(3, 72px); gap: 8px; padding: 16px; background: #0B1117; border: 1px solid #1A232B; border-radius: 24px 24px 0 0; } .ds-key { height: 52px; border: 1px solid #1A232B; border-radius: 14px; background: transparent; color: #D6CCB2; font: 400 22px/1.25 'Atkinson Hyperlegible Mono', monospace; cursor: pointer; } .ds-key:hover, .ds-key:active { background: #1D3A4A; } .ds-key:focus-visible { outline: 2px solid #4F7F95; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Tide Table",
+    "overview": "Humspan is one screen read half-awake in a dark room. A session is a span on a time scale: a round 12-hour dial shows the length as a sea-blue arc, the clock sits in its centre, and the time it ends is written underneath like a tide entry. Below it, ruled rows list the three sound layers as a table would, each with its own switch, its own control and its own level. Then one solid circle, Play. Once a session runs, the screen holds still except the clock and the draining arc.\n\nThe ground is near-black, the ink is warm parchment rather than white, and colour is spent by meaning: sea blue only for measured amounts, amber only for a change of state. Everything is flat. There are no gradients, glows, glass panels, cards or shadows; structure comes from hairline rules and from the tone of the ink. Each kind of job has its own form of control, so no single button style carries everything.\n\nThe world explicitly refuses the sleep-app category default: navy gradients, frosted glass cards and a wheel-picker timer. The same screen ships on Android, iOS and desktop; it does not take on Material or iOS styling per platform.",
+    "keyCharacteristics": [
+      "Near-black ground, parchment ink, one blue for amounts, one amber for state.",
+      "Flat colour and hairline rules; no depth on the main screen.",
+      "A round 12-hour length dial as the signature form.",
+      "Atkinson Hyperlegible Next for words, its Mono for every figure.",
+      "One control form per job: switch, underlined word, stepper, slider.",
+      "Every touch target at least 44 px; fits a phone without scrolling."
+    ],
+    "rules": [
+      { "name": "The Measured Blue Rule", "body": "Sea blue marks an amount on a scale (a length, a level) and nothing else. If it is not measuring, it is not blue.", "section": "colors" },
+      { "name": "The Amber Alarm Rule", "body": "Amber appears only when the session's state changed without the listener's hand. A screen at rest has no amber on it.", "section": "colors" },
+      { "name": "The Parchment Rule", "body": "Text and marks are parchment (`ink`) or faded parchment (`dim`), never pure white. A layer that is off keeps its controls usable and drops only to the faded tone.", "section": "colors" },
+      { "name": "The Figures Are Mono Rule", "body": "Any duration, frequency, percentage or time is set in the Mono with tabular figures; words around it stay in the Next.", "section": "typography" },
+      { "name": "The Heading Means a Layer Rule", "body": "Uppercase tracked labels name a sound layer row and carry its on/off tone. They are not decorative eyebrows and do not go above other content.", "section": "typography" },
+      { "name": "The Forty-Four Rule", "body": "Every touch target is at least 44 × 44 px, including words and stops; their visible mark may be smaller.", "section": "layout" },
+      { "name": "The Flat Night Rule", "body": "Depth is tone and line, never shadow or glow. A new surface is a step lighter (`raised`) and outlined with a hairline.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the screen to ground, parchment and faded parchment, with sea blue only on the dial arc and level fills.",
+      "Do give each new kind of job its own control form (switch, underlined word, stepper, slider) rather than reusing one button style.",
+      "Do set every figure in Atkinson Hyperlegible Mono with tabular figures.",
+      "Do keep every touch target at least 44 px and every text colour at 4.5:1 or better on the ground.",
+      "Do dim an off layer to the faded tone while leaving its controls usable.",
+      "Do separate rows with 1 px hairline rules, and new surfaces with the raised tone plus a hairline."
+    ],
+    "donts": [
+      "Don't use navy gradients, glass or frosted cards, glows or a wheel-picker timer.",
+      "Don't add shadows or elevation anywhere; slider thumbs and sheets stay flat.",
+      "Don't use amber for anything but a state change the listener did not make.",
+      "Don't use pure white text or bright fills; the brightest thing on screen is the parchment Play circle.",
+      "Don't animate anything on the running screen beyond the clock and the draining arc.",
+      "Don't adopt Material or iOS component styling per platform; the one design runs everywhere."
+    ]
+  }
+}

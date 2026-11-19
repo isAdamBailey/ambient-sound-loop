@@ -143,7 +143,7 @@ void main() {
       c.playOrStop();
       audio.beginSession(remaining: 28000);
       async.elapse(tick);
-      expect(c.showLengthNote, isTrue);
+      expect(c.lengthLocked, isTrue);
 
       c.setLength(SessionLength.untilStop);
       expect(saved.last.length, SessionLength.untilStop);
@@ -153,7 +153,7 @@ void main() {
       c.playOrStop();
       audio.finishSession();
       async.elapse(tick);
-      expect(c.showLengthNote, isFalse);
+      expect(c.lengthLocked, isFalse);
       c.playOrStop();
       expect(audio.calls.last, 'start 0.0 5.0 60.0');
       c.dispose();
@@ -166,34 +166,31 @@ void main() {
     audio.calls.clear();
     c.setColor(NoiseColor.white);
     c.setBinaural(true);
-    c.nextBeat();
+    c.setBeatHz(6);
     expect(audio.calls, ['color white', 'binaural true', 'beat 6.0']);
     expect(saved.last, SessionSettings.firstLaunch.copyWith(
         color: NoiseColor.white, binauralOn: true, beatHz: 6));
     c.dispose();
   });
 
-  test('the beat chip cycles 2, 4, 6, 8, 10 Hz', () {
+  test('the beat stepper sets one of 2, 4, 6, 8, 10 Hz', () {
     final c = make();
-    final seen = <int>[];
-    for (var i = 0; i < 5; i++) {
-      c.nextBeat();
-      seen.add(c.settings.beatHz);
+    for (final hz in beatFrequencies) {
+      c.setBeatHz(hz);
+      expect(c.settings.beatHz, hz);
+      expect(audio.calls.last, 'beat $hz.0');
     }
-    expect(seen, [6, 8, 10, 2, 4]);
   });
 
-  test('the boom chip cycles 8, 4, 2 seconds and can be switched off', () {
+  test('the boom gap sets 8, 4 or 2 seconds and the boom can be switched off', () {
     final c = make();
     c.setBoom(true);
     expect(c.settings.boomOn, isTrue);
     expect(audio.calls, contains('boom true'));
-    final seen = <int>[];
-    for (var i = 0; i < 3; i++) {
-      c.nextBoom();
-      seen.add(c.settings.boomSeconds);
+    for (final seconds in [4, 2, 8]) {
+      c.setBoomSeconds(seconds);
+      expect(c.settings.boomSeconds, seconds);
     }
-    expect(seen, [4, 2, 8]);
     expect(c.soundName, 'Pink noise · boom');
     c.setBinaural(true);
     expect(c.soundName, 'Pink noise · 4 Hz beat · boom');

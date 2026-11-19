@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'length.dart';
 
-/// Beat frequencies offered by the binaural chip, in Hz.
+/// Beat frequencies offered by the binaural stepper, in Hz.
 const beatFrequencies = <int>[2, 4, 6, 8, 10];
 
 /// Seconds between boom strikes, slowest first.
