@@ -21,6 +21,8 @@ import UIKit
     channel.setMethodCallHandler { call, result in
       if call.method == "setListening" {
         result(nil)
+      } else if call.method == "outputRoute" {
+        result(Self.isSpeakerRoute())
       } else {
         result(FlutterMethodNotImplemented)
       }
@@ -34,11 +36,19 @@ import UIKit
       object: nil,
       queue: .main
     ) { note in
+      // Every route change: the boom follows the speaker in and out.
+      channel.invokeMethod("outputRoute", arguments: Self.isSpeakerRoute())
       guard
         let reason = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
         reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
       else { return }
       channel.invokeMethod("outputLost", arguments: nil)
     }
+  }
+
+  /// True when audio plays from the device's own speaker.
+  private static func isSpeakerRoute() -> Bool {
+    let outputs = AVAudioSession.sharedInstance().currentRoute.outputs
+    return !outputs.isEmpty && outputs.allSatisfy { $0.portType == .builtInSpeaker }
   }
 }

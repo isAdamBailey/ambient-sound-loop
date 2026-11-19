@@ -81,6 +81,13 @@ void humspan_engine_set_beat_frequency(humspan_engine* engine, float beat_hz); /
 void humspan_engine_set_boom(humspan_engine* engine, int enabled);
 void humspan_engine_set_boom_interval(humspan_engine* engine, float seconds);
 
+/* Tell the engine whether the output is a built-in phone or tablet speaker.
+ * Such a speaker cannot play the boom's deep tones and only buzzes on them,
+ * so it gets a voicing built from higher harmonics with the same pitch.
+ * Headphones and external speakers keep the deep boom. Smoothed, so a route
+ * change never clicks. Off (deep) by default. Control thread (atomic). */
+void humspan_engine_set_speaker_output(humspan_engine* engine, int speaker);
+
 /* Start a session. duration_seconds <= 0 plays until stopped. The fade-in is
  * a raised-cosine S-curve; the fade-out occupies the final fade_out_seconds of
  * the duration and ends in true silence. Restarting while playing begins a new

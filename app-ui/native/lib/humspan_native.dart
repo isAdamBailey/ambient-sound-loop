@@ -51,6 +51,11 @@ final class NativeEngine {
   void setBoomInterval(double seconds) =>
       c.humspan_engine_set_boom_interval(_ptr, seconds);
 
+  /// True while the output is the device's own speaker: the boom switches to
+  /// a voicing that speaker can play.
+  void setSpeakerOutput(bool speaker) =>
+      c.humspan_engine_set_speaker_output(_ptr, speaker ? 1 : 0);
+
   /// [duration] <= 0 plays until stopped. False if the command queue is full.
   bool start({
     required double duration,

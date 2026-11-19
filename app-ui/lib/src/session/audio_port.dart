@@ -18,6 +18,7 @@ abstract interface class AudioPort {
   void setBeatFrequency(double hz);
   void setBoom(bool enabled);
   void setBoomInterval(double seconds);
+  void setSpeakerOutput(bool speaker); // built-in speaker: the boom's speaker voicing
 
   bool start({required double duration, required double fadeIn, required double fadeOut});
   bool stop({required double fade});
@@ -66,6 +67,8 @@ final class FfiAudioPort implements AudioPort {
   void setBoom(bool enabled) => _engine.setBoom(enabled);
   @override
   void setBoomInterval(double seconds) => _engine.setBoomInterval(seconds);
+  @override
+  void setSpeakerOutput(bool speaker) => _engine.setSpeakerOutput(speaker);
 
   @override
   bool start({required double duration, required double fadeIn, required double fadeOut}) =>

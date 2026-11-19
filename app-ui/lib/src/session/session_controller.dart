@@ -302,6 +302,10 @@ class SessionController extends ChangeNotifier {
     _update(_settings.copyWith(boomOn: on));
   }
 
+  /// The platform reports whether sound goes to the device's own speaker.
+  /// Not a setting: it follows the route, whatever the session is doing.
+  void outputRouteChanged({required bool speaker}) => _audio.setSpeakerOutput(speaker);
+
   /// The boom gap: one of [boomIntervals].
   void setBoomSeconds(int seconds) {
     assert(boomIntervals.contains(seconds), 'not a boom gap: $seconds');

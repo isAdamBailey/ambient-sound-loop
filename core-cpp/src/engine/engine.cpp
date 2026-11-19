@@ -16,6 +16,8 @@
 namespace {
 
 using humspan::dsp::BrownFilter;
+using humspan::dsp::kDeepBoom;
+using humspan::dsp::kSpeakerBoom;
 using humspan::dsp::kWhiteGain;
 using humspan::dsp::PinkFilter;
 using humspan::dsp::ResonantBoom;
@@ -104,6 +106,7 @@ struct humspan_engine {
     std::atomic<float> beatHz{4.0f};
     std::atomic<bool> boom{false};
     std::atomic<float> boomInterval{kDefaultBoomSeconds};
+    std::atomic<bool> speaker{false};
 
     // ---- audio -> control ----
     std::atomic<double> elapsedReport{0.0};
@@ -125,8 +128,10 @@ struct humspan_engine {
     float smoothedNoiseLevel = 1.0f;
     float binauralGain = 0.0f;    // on/off x kBinauralMix x level, smoothed
     float boomGain = 0.0f;        // on/off x level, smoothed
+    float speakerMix = 0.0f;      // 0: deep boom, 1: speaker boom, smoothed
     SineOscillator tones[2]; // left: carrier, right: carrier + beat
-    ResonantBoom resonator;
+    ResonantBoom resonator{kDeepBoom};
+    ResonantBoom speakerResonator{kSpeakerBoom}; // strikes in step with resonator
 
     bool active = false;
     bool snapGains = false;     // set by a Start from idle, applied in render
@@ -162,6 +167,7 @@ struct humspan_engine {
             ch.brown.setSampleRate(newRate);
         }
         resonator.setSampleRate(newRate);
+        speakerResonator.setSampleRate(newRate);
     }
 
     double now(int64_t extraFrames = 0) const {
@@ -291,6 +297,7 @@ struct humspan_engine {
             binauralOn ? kBinauralMix * binauralLevel.load(std::memory_order_relaxed) : 0.0f;
         const bool boomOn = boom.load(std::memory_order_relaxed);
         const float targetBoom = boomOn ? boomLevel.load(std::memory_order_relaxed) : 0.0f;
+        const float targetSpeaker = speaker.load(std::memory_order_relaxed) ? 1.0f : 0.0f;
         const double boomEvery = static_cast<double>(boomInterval.load(std::memory_order_relaxed));
         if (snapGains) {
             snapGains = false;
@@ -303,6 +310,7 @@ struct humspan_engine {
             smoothedNoiseLevel = targetNoiseLevel;
             binauralGain = targetBinaural;
             boomGain = targetBoom;
+            speakerMix = targetSpeaker;
         }
         const double toneStep[2] = {
             kCarrierHz * invRate,
@@ -336,13 +344,19 @@ struct humspan_engine {
             smoothedNoiseLevel += smoothCoeff * (targetNoiseLevel - smoothedNoiseLevel);
             binauralGain += smoothCoeff * (targetBinaural - binauralGain);
             boomGain += smoothCoeff * (targetBoom - boomGain);
+            speakerMix += smoothCoeff * (targetSpeaker - speakerMix);
             // Noise filters keep running while audible or fading in; skipped
             // only once the layer is off and fully silent.
             const bool noiseAudible = noiseGain > kSilent || noiseOn;
             const bool toneAudible = binauralGain > kSilent || binauralOn;
             const bool boomAudible = boomGain > kSilent || boomOn;
-            if (boomAudible) resonator.arm();
-            else resonator.reset();
+            if (boomAudible) {
+                resonator.arm();
+                speakerResonator.arm();
+            } else {
+                resonator.reset();
+                speakerResonator.reset();
+            }
             const float gain = smoothedVolume * smoothedDuck * static_cast<float>(env);
 
             for (int ch = 0; ch < 2; ++ch) {
@@ -370,11 +384,16 @@ struct humspan_engine {
                     layer += binauralGain * tones[ch].process(toneStep[ch]);
                 }
                 if (boomAudible) {
-                    layer += boomGain * resonator.sample(ch);
+                    const float deep = resonator.sample(ch);
+                    const float small = speakerResonator.sample(ch);
+                    layer += boomGain * (deep + speakerMix * (small - deep));
                 }
                 out[2 * n + ch] = softClip(holdBed(bed * gain) + layer * gain);
             }
-            if (boomAudible) resonator.advance(boomEvery);
+            if (boomAudible) {
+                resonator.advance(boomEvery);
+                speakerResonator.advance(boomEvery);
+            }
         }
 
         const double elapsed = active ? now() : 0.0;
@@ -486,6 +505,12 @@ void humspan_engine_set_boom_interval(humspan_engine* engine, float seconds) {
     if (engine != nullptr && !std::isnan(seconds)) {
         engine->boomInterval.store(std::clamp(seconds, kMinBoomSeconds, kMaxBoomSeconds),
                                     std::memory_order_relaxed);
+    }
+}
+
+void humspan_engine_set_speaker_output(humspan_engine* engine, int speaker) {
+    if (engine != nullptr) {
+        engine->speaker.store(speaker != 0, std::memory_order_relaxed);
     }
 }
 
