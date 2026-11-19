@@ -44,6 +44,22 @@ void humspan_engine_set_sample_rate(humspan_engine* engine, uint32_t sample_rate
 void humspan_engine_set_noise_color(humspan_engine* engine, humspan_noise_color color);
 void humspan_engine_set_volume(humspan_engine* engine, float volume); /* clamped to [0, 1] */
 
+/* Noise on/off, independent of the color: a color set while noise is off is
+ * kept for when it comes back on. Smoothed, so it never clicks, and it leaves
+ * the binaural and boom levels as they are. With every layer off a session
+ * renders silence and its timer keeps running. On by default.
+ * Control thread (atomic). */
+void humspan_engine_set_noise(humspan_engine* engine, int enabled);
+
+/* Per-layer levels: a linear gain clamped to [0, 1] on top of each layer's
+ * reference level (noise at its color's level, binaural 6 dB under white and
+ * pink, the boom as tuned), so a level only lowers a layer. Default 1. Each
+ * applies whether or not its layer is on, and is smoothed like the volume.
+ * Any dB taper belongs to the caller. Control thread (atomics). */
+void humspan_engine_set_noise_level(humspan_engine* engine, float level);
+void humspan_engine_set_binaural_level(humspan_engine* engine, float level);
+void humspan_engine_set_boom_level(humspan_engine* engine, float level);
+
 /* Duck the output for a phone call or system interruption: a gain in [0, 1]
  * (1 = no duck) on top of the volume, smoothed so it settles in about 500 ms.
  * The session and its timer carry on. Control thread (atomic). */

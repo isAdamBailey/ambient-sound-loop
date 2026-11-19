@@ -98,3 +98,47 @@ class BlockLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(text, style: SessionText.label(size: size));
 }
+
+/// A level slider: 0–1, announced as a percentage under [label]. Spec #9 §2:
+/// the app maps its position to gain with a dB taper.
+class LevelSlider extends StatelessWidget {
+  const LevelSlider({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.onChangeEnd,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChangeEnd;
+
+  static String percent(double v) => '${(v * 100).round()}%';
+
+  @override
+  Widget build(BuildContext context) => MergeSemantics(
+    child: Semantics(
+      label: label,
+      child: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          trackHeight: 3,
+          activeTrackColor: SessionColors.primary,
+          inactiveTrackColor: SessionColors.border,
+          thumbColor: SessionColors.primary,
+          overlayColor: const Color(0x338FB3D9),
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+          overlayShape: const RoundSliderOverlayShape(overlayRadius: 22),
+          trackShape: const RoundedRectSliderTrackShape(),
+        ),
+        child: Slider(
+          value: value.clamp(0.0, 1.0),
+          onChanged: onChanged,
+          onChangeEnd: onChangeEnd,
+          semanticFormatterCallback: percent,
+        ),
+      ),
+    ),
+  );
+}

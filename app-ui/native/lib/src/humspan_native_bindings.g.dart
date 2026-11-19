@@ -91,13 +91,19 @@ external void humspan_engine_set_beat_frequency(
 
 /// Binaural beat: a stereo tone layer on top of the noise, a fixed 180 Hz
 /// carrier in the left channel and 180 Hz + beat in the right. It follows the
-/// session volume and envelope and sits 6 dB under the noise. Switching it on
+/// session volume and envelope and sits 6 dB under white and pink. Switching it on
 /// or off is smoothed; changing the beat keeps phase, so neither clicks. Off by
 /// default, beat 4 Hz. Control thread (atomics).
 @ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Int)>()
 external void humspan_engine_set_binaural(
   ffi.Pointer<humspan_engine> engine,
   int enabled,
+);
+
+@ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Float)>()
+external void humspan_engine_set_binaural_level(
+  ffi.Pointer<humspan_engine> engine,
+  double level,
 );
 
 /// A low resonant boom that strikes left, then right, then left. It follows
@@ -117,6 +123,12 @@ external void humspan_engine_set_boom_interval(
   double seconds,
 );
 
+@ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Float)>()
+external void humspan_engine_set_boom_level(
+  ffi.Pointer<humspan_engine> engine,
+  double level,
+);
+
 /// Duck the output for a phone call or system interruption: a gain in [0, 1]
 /// (1 = no duck) on top of the volume, smoothed so it settles in about 500 ms.
 /// The session and its timer carry on. Control thread (atomic).
@@ -124,6 +136,17 @@ external void humspan_engine_set_boom_interval(
 external void humspan_engine_set_duck_gain(
   ffi.Pointer<humspan_engine> engine,
   double gain,
+);
+
+/// Noise on/off, independent of the color: a color set while noise is off is
+/// kept for when it comes back on. Smoothed, so it never clicks, and it leaves
+/// the binaural and boom levels as they are. With every layer off a session
+/// renders silence and its timer keeps running. On by default.
+/// Control thread (atomic).
+@ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Int)>()
+external void humspan_engine_set_noise(
+  ffi.Pointer<humspan_engine> engine,
+  int enabled,
 );
 
 /// Continuous parameters (smoothed on the audio thread, no zipper noise).
@@ -141,6 +164,17 @@ void humspan_engine_set_noise_color(
 ) {
   return _humspan_engine_set_noise_color(engine, color.value);
 }
+
+/// Per-layer levels: a linear gain clamped to [0, 1] on top of each layer's
+/// reference level (noise at its color's level, binaural 6 dB under white and
+/// pink, the boom as tuned), so a level only lowers a layer. Default 1. Each
+/// applies whether or not its layer is on, and is smoothed like the volume.
+/// Any dB taper belongs to the caller. Control thread (atomics).
+@ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Float)>()
+external void humspan_engine_set_noise_level(
+  ffi.Pointer<humspan_engine> engine,
+  double level,
+);
 
 /// The stream was reopened at a new rate (Bluetooth route change etc.). The
 /// timer is kept in time, not samples, so a session's remaining duration is

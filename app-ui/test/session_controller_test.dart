@@ -31,8 +31,10 @@ void main() {
   test('opens stopped on the restored settings and applies them to the engine', () {
     final c = make(settings: SessionSettings.firstLaunch.copyWith(color: NoiseColor.brown));
     expect(c.phase, SessionPhase.stopped);
-    expect(audio.calls, containsAll(
-        ['color brown', 'volume 1.0', 'binaural false', 'beat 4.0', 'boom false', 'boom-interval 8.0']));
+    expect(audio.calls, containsAll([
+      'noise true', 'color brown', 'volume 1.0', 'binaural false', 'beat 4.0', 'boom false',
+      'boom-interval 8.0', 'noise-level 1.0', 'binaural-level 1.0', 'boom-level 1.0',
+    ]));
     expect(audio.calls.where((s) => s.startsWith('start') || s == 'open'), isEmpty,
         reason: 'never plays sound on launch');
   });
@@ -390,6 +392,128 @@ void main() {
       c.focusLost(FocusLoss.permanent);
       expect(c.phase, SessionPhase.stopped);
       c.dispose();
+    });
+  });
+
+  test('restored layer toggles and levels reach the engine', () {
+    make(settings: SessionSettings.firstLaunch.copyWith(
+        noiseOn: false, binauralOn: true, noiseLevel: 0.5, binauralLevel: 0, boomLevel: 0.75));
+    expect(audio.calls, containsAll([
+      'noise false', 'binaural true', 'noise-level ${levelGain(0.5)}', 'binaural-level ${levelGain(0)}',
+      'boom-level ${levelGain(0.75)}',
+    ]));
+  });
+
+  group('independent layers', () {
+    test('noise toggles on its own and keeps the color', () {
+      final c = make();
+      audio.calls.clear();
+      c.setNoise(false);
+      expect(audio.calls, ['noise false']);
+      expect(c.settings.noiseOn, isFalse);
+      expect(c.settings.binauralOn, isFalse);
+      c.setColor(NoiseColor.brown); // ready for when noise comes back
+      expect(c.settings.color, NoiseColor.brown);
+      expect(saved.last, SessionSettings.firstLaunch.copyWith(noiseOn: false, color: NoiseColor.brown));
+    });
+
+    test('with every layer off, Play is disabled while stopped', () {
+      final c = make(settings: SessionSettings.firstLaunch.copyWith(noiseOn: false));
+      expect(c.canPlay, isFalse);
+      audio.calls.clear();
+      c.playOrStop();
+      expect(c.phase, SessionPhase.stopped);
+      expect(audio.calls, isEmpty, reason: 'nothing to play');
+      c.setBoom(true);
+      expect(c.canPlay, isTrue);
+      c.playOrStop();
+      expect(c.phase, SessionPhase.playing);
+      c.dispose();
+    });
+
+    test('a slider at its bottom is quiet, not off: Play stays available', () {
+      final c = make();
+      c.setLevel(SoundLayer.noise, 0);
+      expect(c.canPlay, isTrue);
+    });
+
+    test('mid-session the last layer can go off; the session carries on in silence', () {
+      fakeAsync((async) {
+        final c = make();
+        c.playOrStop();
+        audio.beginSession(remaining: 3000);
+        async.elapse(tick);
+        c.setNoise(false);
+        expect(c.phase, SessionPhase.playing);
+        expect(c.canPlay, isTrue, reason: 'Stop stays available');
+        expect(c.soundName, 'Silent');
+        audio.remaining = 2990;
+        async.elapse(tick);
+        expect(c.clockText, '0:49:50');
+        c.playOrStop();
+        expect(c.phase, SessionPhase.stopped);
+        expect(c.canPlay, isFalse);
+        c.dispose();
+      });
+    });
+  });
+
+  group('level sliders', () {
+    test('each step reaches the engine through the dB taper', () {
+      final c = make();
+      audio.calls.clear();
+      c.setLevel(SoundLayer.noise, 0.5);
+      c.setLevel(SoundLayer.binaural, 0.75);
+      c.setLevel(SoundLayer.boom, 0);
+      expect(audio.calls, [
+        'noise-level ${levelGain(0.5)}',
+        'binaural-level ${levelGain(0.75)}',
+        'boom-level ${levelGain(0)}',
+      ]);
+      expect(levelGain(0.5), closeTo(0.1, 1e-12)); // -20 dB
+      expect(c.settings.noiseLevel, 0.5);
+      expect(c.settings.binauralLevel, 0.75);
+      expect(c.settings.boomLevel, 0.0);
+    });
+
+    test('a level saves when the drag ends, not on every step', () {
+      final c = make();
+      c.setLevel(SoundLayer.binaural, 0.9);
+      c.setLevel(SoundLayer.binaural, 0.8);
+      c.setLevel(SoundLayer.binaural, 0.7);
+      expect(saved, isEmpty);
+      c.saveLevels();
+      expect(saved, [SessionSettings.firstLaunch.copyWith(binauralLevel: 0.7)]);
+      c.saveLevels();
+      expect(saved, hasLength(1), reason: 'nothing new to save');
+    });
+
+    test('a level changes only its own layer', () {
+      final c = make();
+      audio.calls.clear();
+      c.setLevel(SoundLayer.boom, 0.4);
+      expect(audio.calls, ['boom-level ${levelGain(0.4)}']);
+      expect(c.settings, SessionSettings.firstLaunch.copyWith(boomLevel: 0.4));
+    });
+  });
+
+  test('now-playing subtitle lists only the layers that are on', () {
+    final c = make();
+    const cases = {
+      (true, false, false): 'Pink noise',
+      (true, true, false): 'Pink noise · 4 Hz beat',
+      (true, false, true): 'Pink noise · boom',
+      (true, true, true): 'Pink noise · 4 Hz beat · boom',
+      (false, true, false): '4 Hz beat',
+      (false, false, true): 'Boom',
+      (false, true, true): '4 Hz beat · boom',
+      (false, false, false): 'Silent',
+    };
+    cases.forEach((on, name) {
+      c.setNoise(on.$1);
+      c.setBinaural(on.$2);
+      c.setBoom(on.$3);
+      expect(c.soundName, name, reason: '$on');
     });
   });
 

@@ -58,12 +58,16 @@ class SessionController extends ChangeNotifier {
   }) : _audio = audio,
        _settings = settings {
     _audio
+      ..setNoise(settings.noiseOn)
       ..setColor(settings.color)
       ..setVolume(1)
       ..setBinaural(settings.binauralOn)
       ..setBeatFrequency(settings.beatHz.toDouble())
       ..setBoom(settings.boomOn)
       ..setBoomInterval(settings.boomSeconds.toDouble());
+    for (final layer in SoundLayer.values) {
+      _sendLevel(layer, settings.level(layer));
+    }
   }
 
   static const fadeIn = 5.0;
@@ -93,6 +97,7 @@ class SessionController extends ChangeNotifier {
   SessionPhase _phase = SessionPhase.stopped;
   SessionLength? _sessionLength; // the running session's own length
   bool _sawPlaying = false; // the audio thread has picked up the start
+  bool _levelsUnsaved = false; // a slider moved; saved when its drag ends
   Timer? _ticker;
   Timer? _pendingSystemPause;
   Timer? _pendingRestart;
@@ -127,18 +132,27 @@ class SessionController extends ChangeNotifier {
   /// "Length applies next session." while one is running.
   bool get showLengthNote => _phase != SessionPhase.stopped;
 
-  /// The sound, for the system now-playing subtitle.
+  /// The sound, for the system now-playing subtitle: the layers that are on,
+  /// in the order noise · beat · boom, or "Silent" with every layer off.
   String get soundName {
     final color = switch (_settings.color) {
       NoiseColor.white => 'White',
       NoiseColor.pink => 'Pink',
       NoiseColor.brown => 'Brown',
     };
-    final parts = <String>['$color noise'];
-    if (_settings.binauralOn) parts.add('${_settings.beatHz} Hz beat');
-    if (_settings.boomOn) parts.add('boom');
-    return parts.join(' · ');
+    final parts = <String>[
+      if (_settings.noiseOn) '$color noise',
+      if (_settings.binauralOn) '${_settings.beatHz} Hz beat',
+      if (_settings.boomOn) 'boom',
+    ];
+    if (parts.isEmpty) return 'Silent';
+    final name = parts.join(' · ');
+    return name[0].toUpperCase() + name.substring(1);
   }
+
+  /// Play is offered unless the screen is stopped with every layer off. A
+  /// running session may go silent; it carries on until a layer returns.
+  bool get canPlay => _phase != SessionPhase.stopped || _settings.anyLayerOn;
 
   /// The running timed session's length, for the now-playing progress bar.
   Duration? get sessionDuration => _phase == SessionPhase.stopped ? null : _sessionLength?.duration;
@@ -162,6 +176,7 @@ class SessionController extends ChangeNotifier {
         if (!_audio.isStreamRunning && !_audio.openStream()) return;
         _audio.resume(fadeIn: fadeIn);
       case SessionPhase.stopped:
+        if (!_settings.anyLayerOn) return;
         _audio.setDuckGain(1);
         if (!_audio.openStream()) return;
         final length = _settings.length;
@@ -228,6 +243,41 @@ class SessionController extends ChangeNotifier {
 
   // --- Settings ---
 
+  void setNoise(bool on) {
+    _audio.setNoise(on);
+    _update(_settings.copyWith(noiseOn: on));
+  }
+
+  /// A level slider moved to [position] (0–1). The engine hears every step;
+  /// the setting is saved by [saveLevels] when the drag ends.
+  void setLevel(SoundLayer layer, double position) {
+    final p = position.clamp(0.0, 1.0);
+    if (p == _settings.level(layer)) return;
+    _sendLevel(layer, p);
+    _settings = _settings.withLevel(layer, p);
+    _levelsUnsaved = true;
+    notifyListeners();
+  }
+
+  /// A level slider's drag ended: save the levels.
+  void saveLevels() {
+    if (!_levelsUnsaved) return;
+    _levelsUnsaved = false;
+    onSettingsChanged(_settings);
+  }
+
+  void _sendLevel(SoundLayer layer, double position) {
+    final gain = levelGain(position);
+    switch (layer) {
+      case SoundLayer.noise:
+        _audio.setNoiseLevel(gain);
+      case SoundLayer.binaural:
+        _audio.setBinauralLevel(gain);
+      case SoundLayer.boom:
+        _audio.setBoomLevel(gain);
+    }
+  }
+
   void setColor(NoiseColor color) {
     _audio.setColor(color);
     _update(_settings.copyWith(color: color));
@@ -265,6 +315,7 @@ class SessionController extends ChangeNotifier {
   void _update(SessionSettings next) {
     if (next == _settings) return;
     _settings = next;
+    _levelsUnsaved = false; // saved along with this change
     onSettingsChanged(next);
     notifyListeners();
   }

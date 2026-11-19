@@ -35,6 +35,13 @@ final class NativeEngine {
   void setNoiseColor(NoiseColor color) =>
       c.humspan_engine_set_noise_color(_ptr, color._native);
   void setVolume(double volume) => c.humspan_engine_set_volume(_ptr, volume);
+  void setNoise(bool enabled) => c.humspan_engine_set_noise(_ptr, enabled ? 1 : 0);
+
+  /// Layer levels: linear gain in [0, 1] over each layer's reference level.
+  void setNoiseLevel(double level) => c.humspan_engine_set_noise_level(_ptr, level);
+  void setBinauralLevel(double level) =>
+      c.humspan_engine_set_binaural_level(_ptr, level);
+  void setBoomLevel(double level) => c.humspan_engine_set_boom_level(_ptr, level);
   void setDuckGain(double gain) => c.humspan_engine_set_duck_gain(_ptr, gain);
   void setBinaural(bool enabled) =>
       c.humspan_engine_set_binaural(_ptr, enabled ? 1 : 0);

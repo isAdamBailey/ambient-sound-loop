@@ -9,6 +9,11 @@ abstract interface class AudioPort {
   void setColor(NoiseColor color);
   void setVolume(double volume); // engine gain, full scale in the app; the device volume is the control
   void setDuckGain(double gain); // 0–1, 1 = no duck
+  void setNoise(bool enabled);
+  // SoundLayer levels: linear gain 0–1 over each layer's reference level.
+  void setNoiseLevel(double gain);
+  void setBinauralLevel(double gain);
+  void setBoomLevel(double gain);
   void setBinaural(bool enabled);
   void setBeatFrequency(double hz);
   void setBoom(bool enabled);
@@ -45,6 +50,14 @@ final class FfiAudioPort implements AudioPort {
   void setVolume(double volume) => _engine.setVolume(volume);
   @override
   void setDuckGain(double gain) => _engine.setDuckGain(gain);
+  @override
+  void setNoise(bool enabled) => _engine.setNoise(enabled);
+  @override
+  void setNoiseLevel(double gain) => _engine.setNoiseLevel(gain);
+  @override
+  void setBinauralLevel(double gain) => _engine.setBinauralLevel(gain);
+  @override
+  void setBoomLevel(double gain) => _engine.setBoomLevel(gain);
   @override
   void setBinaural(bool enabled) => _engine.setBinaural(enabled);
   @override

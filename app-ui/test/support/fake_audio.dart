@@ -16,6 +16,14 @@ class FakeAudio implements AudioPort {
   @override
   void setDuckGain(double gain) => calls.add('duck $gain');
   @override
+  void setNoise(bool enabled) => calls.add('noise $enabled');
+  @override
+  void setNoiseLevel(double gain) => calls.add('noise-level $gain');
+  @override
+  void setBinauralLevel(double gain) => calls.add('binaural-level $gain');
+  @override
+  void setBoomLevel(double gain) => calls.add('boom-level $gain');
+  @override
   void setBinaural(bool enabled) => calls.add('binaural $enabled');
   @override
   void setBeatFrequency(double hz) => calls.add('beat $hz');

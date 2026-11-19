@@ -94,6 +94,10 @@ struct humspan_engine {
     // ---- control -> audio ----
     humspan::engine::SpscQueue<Command, 16> commands;
     std::atomic<int> color{HUMSPAN_NOISE_PINK};
+    std::atomic<bool> noise{true};
+    std::atomic<float> noiseLevel{1.0f};
+    std::atomic<float> binauralLevel{1.0f};
+    std::atomic<float> boomLevel{1.0f};
     std::atomic<float> volume{0.5f};
     std::atomic<float> duck{1.0f};
     std::atomic<bool> binaural{false};
@@ -117,12 +121,15 @@ struct humspan_engine {
     float colorGain[kColorCount] = {0.0f, 0.0f, 0.0f};
     float smoothedVolume = 0.5f;
     float smoothedDuck = 1.0f;
-    float binauralGain = 0.0f;
-    float boomGain = 0.0f;
+    float noiseGain = 1.0f;       // noise on/off, smoothed
+    float smoothedNoiseLevel = 1.0f;
+    float binauralGain = 0.0f;    // on/off x kBinauralMix x level, smoothed
+    float boomGain = 0.0f;        // on/off x level, smoothed
     SineOscillator tones[2]; // left: carrier, right: carrier + beat
     ResonantBoom resonator;
 
     bool active = false;
+    bool snapGains = false;     // set by a Start from idle, applied in render
     double elapsedBase = 0.0;   // seconds rendered before the current rate segment
     int64_t segmentFrames = 0;  // frames rendered at the current rate
     double duration = 0.0;      // <= 0: until stopped
@@ -164,6 +171,9 @@ struct humspan_engine {
     void handle(const Command& cmd) {
         switch (cmd.type) {
         case Command::Type::Start:
+            // From idle nothing is sounding, so the smoothed gains can jump
+            // to their targets: the session opens on the chosen mix.
+            snapGains = !active;
             startLevel = active ? envelope : 0.0;
             active = true;
             stopping = false;
@@ -274,10 +284,26 @@ struct humspan_engine {
         const int targetColor = color.load(std::memory_order_relaxed);
         const float targetVolume = volume.load(std::memory_order_relaxed);
         const float targetDuck = duck.load(std::memory_order_relaxed);
+        const bool noiseOn = noise.load(std::memory_order_relaxed);
+        const float targetNoiseLevel = noiseLevel.load(std::memory_order_relaxed);
         const bool binauralOn = binaural.load(std::memory_order_relaxed);
-        const float targetBinaural = binauralOn ? kBinauralMix : 0.0f;
+        const float targetBinaural =
+            binauralOn ? kBinauralMix * binauralLevel.load(std::memory_order_relaxed) : 0.0f;
         const bool boomOn = boom.load(std::memory_order_relaxed);
+        const float targetBoom = boomOn ? boomLevel.load(std::memory_order_relaxed) : 0.0f;
         const double boomEvery = static_cast<double>(boomInterval.load(std::memory_order_relaxed));
+        if (snapGains) {
+            snapGains = false;
+            smoothedVolume = targetVolume;
+            smoothedDuck = targetDuck;
+            for (int c = 0; c < kColorCount; ++c) {
+                colorGain[c] = c == targetColor ? 1.0f : 0.0f;
+            }
+            noiseGain = noiseOn ? 1.0f : 0.0f;
+            smoothedNoiseLevel = targetNoiseLevel;
+            binauralGain = targetBinaural;
+            boomGain = targetBoom;
+        }
         const double toneStep[2] = {
             kCarrierHz * invRate,
             (kCarrierHz + static_cast<double>(beatHz.load(std::memory_order_relaxed))) * invRate,
@@ -306,8 +332,13 @@ struct humspan_engine {
                 const float target = c == targetColor ? 1.0f : 0.0f;
                 colorGain[c] += smoothCoeff * (target - colorGain[c]);
             }
+            noiseGain += smoothCoeff * ((noiseOn ? 1.0f : 0.0f) - noiseGain);
+            smoothedNoiseLevel += smoothCoeff * (targetNoiseLevel - smoothedNoiseLevel);
             binauralGain += smoothCoeff * (targetBinaural - binauralGain);
-            boomGain += smoothCoeff * ((boomOn ? 1.0f : 0.0f) - boomGain);
+            boomGain += smoothCoeff * (targetBoom - boomGain);
+            // Noise filters keep running while audible or fading in; skipped
+            // only once the layer is off and fully silent.
+            const bool noiseAudible = noiseGain > kSilent || noiseOn;
             const bool toneAudible = binauralGain > kSilent || binauralOn;
             const bool boomAudible = boomGain > kSilent || boomOn;
             if (boomAudible) resonator.arm();
@@ -316,18 +347,23 @@ struct humspan_engine {
 
             for (int ch = 0; ch < 2; ++ch) {
                 Channel& chan = channels[ch];
+                // The generator always advances, so the noise stream (and
+                // determinism) does not depend on when noise was switched.
                 const float white = chan.rng.bipolar();
-                float noise = 0.0f;
-                if (colorGain[HUMSPAN_NOISE_WHITE] > kSilent) {
-                    noise += colorGain[HUMSPAN_NOISE_WHITE] * white * kWhiteGain;
-                }
-                // Filters keep running while audible or fading in; skipped
-                // only when fully silent (their state then fades in from 0).
-                if (colorGain[HUMSPAN_NOISE_PINK] > kSilent || targetColor == HUMSPAN_NOISE_PINK) {
-                    noise += colorGain[HUMSPAN_NOISE_PINK] * chan.pink.process(white);
-                }
-                if (colorGain[HUMSPAN_NOISE_BROWN] > kSilent || targetColor == HUMSPAN_NOISE_BROWN) {
-                    noise += colorGain[HUMSPAN_NOISE_BROWN] * chan.brown.process(white);
+                float bed = 0.0f;
+                if (noiseAudible) {
+                    if (colorGain[HUMSPAN_NOISE_WHITE] > kSilent) {
+                        bed += colorGain[HUMSPAN_NOISE_WHITE] * white * kWhiteGain;
+                    }
+                    // Filters keep running while audible or fading in; skipped
+                    // only when fully silent (their state then fades in from 0).
+                    if (colorGain[HUMSPAN_NOISE_PINK] > kSilent || targetColor == HUMSPAN_NOISE_PINK) {
+                        bed += colorGain[HUMSPAN_NOISE_PINK] * chan.pink.process(white);
+                    }
+                    if (colorGain[HUMSPAN_NOISE_BROWN] > kSilent || targetColor == HUMSPAN_NOISE_BROWN) {
+                        bed += colorGain[HUMSPAN_NOISE_BROWN] * chan.brown.process(white);
+                    }
+                    bed *= noiseGain * smoothedNoiseLevel;
                 }
                 float layer = 0.0f;
                 if (toneAudible) {
@@ -336,7 +372,7 @@ struct humspan_engine {
                 if (boomAudible) {
                     layer += boomGain * resonator.sample(ch);
                 }
-                out[2 * n + ch] = softClip(holdBed(noise * gain) + layer * gain);
+                out[2 * n + ch] = softClip(holdBed(bed * gain) + layer * gain);
             }
             if (boomAudible) resonator.advance(boomEvery);
         }
@@ -388,6 +424,32 @@ void humspan_engine_set_noise_color(humspan_engine* engine, humspan_noise_color 
     if (engine != nullptr && color >= HUMSPAN_NOISE_WHITE && color <= HUMSPAN_NOISE_BROWN) {
         engine->color.store(color, std::memory_order_relaxed);
     }
+}
+
+void humspan_engine_set_noise(humspan_engine* engine, int enabled) {
+    if (engine != nullptr) {
+        engine->noise.store(enabled != 0, std::memory_order_relaxed);
+    }
+}
+
+namespace {
+void storeLevel(std::atomic<float>& level, float value) {
+    if (!std::isnan(value)) {
+        level.store(std::clamp(value, 0.0f, 1.0f), std::memory_order_relaxed);
+    }
+}
+} // namespace
+
+void humspan_engine_set_noise_level(humspan_engine* engine, float level) {
+    if (engine != nullptr) storeLevel(engine->noiseLevel, level);
+}
+
+void humspan_engine_set_binaural_level(humspan_engine* engine, float level) {
+    if (engine != nullptr) storeLevel(engine->binauralLevel, level);
+}
+
+void humspan_engine_set_boom_level(humspan_engine* engine, float level) {
+    if (engine != nullptr) storeLevel(engine->boomLevel, level);
 }
 
 void humspan_engine_set_volume(humspan_engine* engine, float volume) {

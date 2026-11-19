@@ -36,7 +36,7 @@ void main() {
   group('layout', () {
     testWidgets('under 900 px the blocks stack top to bottom', (tester) async {
       await pumpScreen(tester, const Size(390, 844));
-      final ys = ['8:00:00', 'COLOR', 'BINAURAL BEAT', 'BOOM', 'LENGTH']
+      final ys = ['8:00:00', 'NOISE', 'BINAURAL BEAT', 'BOOM', 'LENGTH']
           .map((t) => centerOf(tester, t).dy)
           .toList();
       expect(ys, orderedEquals([...ys]..sort()));
@@ -48,7 +48,7 @@ void main() {
 
     testWidgets('at 900 px and up the same blocks sit in one row, left to right', (tester) async {
       await pumpScreen(tester, const Size(900, 640));
-      final xs = ['8:00:00', 'COLOR', 'BINAURAL BEAT', 'BOOM', 'LENGTH']
+      final xs = ['8:00:00', 'NOISE', 'BINAURAL BEAT', 'BOOM', 'LENGTH']
           .map((t) => centerOf(tester, t).dx)
           .toList();
       expect(xs, orderedEquals([...xs]..sort()));
@@ -58,11 +58,11 @@ void main() {
 
     testWidgets('switches when the window is resized across 900 px', (tester) async {
       await pumpScreen(tester, const Size(1200, 700));
-      expect(centerOf(tester, 'COLOR').dx, lessThan(centerOf(tester, 'BINAURAL BEAT').dx));
-      expect(centerOf(tester, 'COLOR').dy, closeTo(centerOf(tester, 'BINAURAL BEAT').dy, 40));
+      expect(centerOf(tester, 'NOISE').dx, lessThan(centerOf(tester, 'BINAURAL BEAT').dx));
+      expect(centerOf(tester, 'NOISE').dy, closeTo(centerOf(tester, 'BINAURAL BEAT').dy, 40));
       tester.view.physicalSize = const Size(899, 700);
       await tester.pump();
-      expect(centerOf(tester, 'COLOR').dy, lessThan(centerOf(tester, 'BINAURAL BEAT').dy));
+      expect(centerOf(tester, 'NOISE').dy, lessThan(centerOf(tester, 'BINAURAL BEAT').dy));
     });
 
     testWidgets('the minimum desktop window and a landscape phone do not overflow', (tester) async {
@@ -84,6 +84,87 @@ void main() {
       expect(controller.settings.color, NoiseColor.brown);
       expect(tester.getSemantics(find.text('Brown')), isSemantics(isButton: true, isToggled: true));
       expect(tester.getSemantics(find.text('Pink')), isSemantics(isButton: true, isToggled: false));
+      semantics.dispose();
+    });
+
+    testWidgets('noise toggles on its own; the colors stay usable while off', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpScreen(tester, const Size(390, 844));
+      expect(tester.getSemantics(find.bySemanticsLabel('Noise')), isSemantics(isButton: true, isToggled: true));
+      await tester.tap(find.bySemanticsLabel('Noise'));
+      await tester.pump();
+      expect(controller.settings.noiseOn, isFalse);
+      expect(tester.getSemantics(find.bySemanticsLabel('Noise')), isSemantics(isButton: true, isToggled: false));
+      await tester.tap(find.text('White'));
+      await tester.pump();
+      expect(controller.settings.color, NoiseColor.white);
+      expect(controller.settings.noiseOn, isFalse);
+      semantics.dispose();
+    });
+
+    testWidgets('each layer has a labelled level slider that announces a percentage', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpScreen(tester, const Size(390, 844),
+          settings: SessionSettings.firstLaunch.copyWith(binauralLevel: 0.5));
+      expect(find.byType(Slider), findsNWidgets(3));
+      expect(tester.getSemantics(find.bySemanticsLabel('Noise level')),
+          isSemantics(isSlider: true, value: '100%', isEnabled: true));
+      expect(tester.getSemantics(find.bySemanticsLabel('Binaural level')),
+          isSemantics(isSlider: true, value: '50%', isEnabled: true),
+          reason: 'usable while binaural is off');
+      expect(tester.getSemantics(find.bySemanticsLabel('Boom level')),
+          isSemantics(isSlider: true, value: '100%', isEnabled: true));
+      semantics.dispose();
+    });
+
+    testWidgets('dragging a level slider moves only its layer and saves at the end', (tester) async {
+      await pumpScreen(tester, const Size(390, 844));
+      final saved = <SessionSettings>[];
+      final c = SessionController(
+        audio: audio,
+        settings: SessionSettings.firstLaunch,
+        reroute: RerouteBehavior.ignore,
+        onSettingsChanged: saved.add,
+      );
+      addTearDown(c.dispose);
+      await tester.pumpWidget(MaterialApp(theme: sessionTheme(), home: SessionScreen(controller: c)));
+      final boom = find.byType(Slider).at(2);
+      final width = tester.getSize(boom).width;
+      await tester.drag(boom, Offset(-width / 2, 0));
+      await tester.pump();
+      expect(c.settings.boomLevel, lessThan(0.9));
+      expect(c.settings.noiseLevel, 1.0);
+      expect(c.settings.binauralLevel, 1.0);
+      expect(saved, hasLength(1), reason: 'one save, when the drag ended');
+      expect(saved.single.boomLevel, c.settings.boomLevel);
+    });
+
+    testWidgets('with every layer off Play is disabled, with a note', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpScreen(tester, const Size(390, 844));
+      expect(find.text('Turn on a sound to play.'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Noise'));
+      await tester.pump();
+      expect(find.text('Turn on a sound to play.'), findsOneWidget);
+      expect(tester.widget<IconButton>(find.byType(IconButton)).onPressed, isNull);
+      await tester.tap(playButtonFinder(), warnIfMissed: false);
+      await tester.pump();
+      expect(controller.phase, SessionPhase.stopped);
+
+      await tester.tap(find.bySemanticsLabel('Boom'));
+      await tester.pump();
+      expect(find.text('Turn on a sound to play.'), findsNothing);
+      await tester.tap(playButtonFinder());
+      await tester.pump();
+      expect(controller.phase, SessionPhase.playing);
+
+      // While playing, the last layer can still be switched off.
+      await tester.tap(find.bySemanticsLabel('Boom'));
+      await tester.pump();
+      expect(controller.settings.boomOn, isFalse);
+      expect(controller.phase, SessionPhase.playing);
+      expect(find.text('Turn on a sound to play.'), findsNothing);
+      expect(stopButtonFinder(), findsOneWidget);
       semantics.dispose();
     });
 
@@ -147,12 +228,15 @@ void main() {
 
     testWidgets('touch targets are at least 44 px', (tester) async {
       await pumpScreen(tester, const Size(360, 640));
-      for (final label in ['White', 'Pink', 'Brown', 'Off', '4 Hz', '8 s']) {
+      for (final label in ['On', 'White', 'Pink', 'Brown', 'Off', '4 Hz', '8 s']) {
         final size = tester.getSize(find.ancestor(of: find.text(label), matching: find.byType(TextButton)).first);
         expect(size.height, greaterThanOrEqualTo(44), reason: label);
         expect(size.width, greaterThanOrEqualTo(44), reason: label);
       }
       expect(tester.getSize(playButtonFinder()).height, greaterThanOrEqualTo(44));
+      for (var i = 0; i < 3; i++) {
+        expect(tester.getSize(find.byType(Slider).at(i)).height, greaterThanOrEqualTo(44), reason: 'slider $i');
+      }
     });
 
     testWidgets('no sleep, health or entrainment wording', (tester) async {
