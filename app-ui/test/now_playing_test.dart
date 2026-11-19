@@ -80,6 +80,16 @@ void main() {
     await _settle();
     expect(port.subtitle, 'Pink noise · 4 Hz beat · boom');
 
+    controller.setNoise(false);
+    await _settle();
+    expect(port.subtitle, '4 Hz beat · boom');
+
+    controller.setBinaural(false);
+    controller.setBoom(false);
+    await _settle();
+    expect(port.subtitle, 'Silent', reason: 'the session carries on with every layer off');
+    expect(port.playing, isTrue);
+
     controller.playOrStop();
     await _settle();
     expect(port.calls.last, 'deactivate');

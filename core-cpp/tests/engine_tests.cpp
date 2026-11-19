@@ -444,6 +444,180 @@ static void testBoomAlternatesEars() {
     CHECK(leftover < 0.01, "switching the boom off fades it out (residual %.4f)", leftover);
 }
 
+// A started, settled engine at full volume with the given layers.
+static void startLayers(humspan_engine* e, bool noise, bool binaural, bool boom) {
+    humspan_engine_set_volume(e, 1.0f);
+    humspan_engine_set_noise(e, noise ? 1 : 0);
+    humspan_engine_set_binaural(e, binaural ? 1 : 0);
+    humspan_engine_set_beat_frequency(e, 4.0f);
+    humspan_engine_set_boom(e, boom ? 1 : 0);
+    humspan_engine_set_boom_interval(e, 4.0f);
+    humspan_engine_start(e, 0.0, 0.0, 0.0);
+}
+
+static std::vector<float> minus(const std::vector<float>& a, const std::vector<float>& b) {
+    std::vector<float> d(a.size());
+    for (size_t i = 0; i < a.size(); ++i) d[i] = a[i] - b[i];
+    return d;
+}
+
+static void testEachLayerAlone() {
+    std::printf("each layer plays alone at its usual level; all off is silent and timed\n");
+    const double want = kBedRms * 0.5 * std::numbers::sqrt2; // binaural amplitude
+
+    { // noise only: the default, unchanged
+        Engine eng;
+        startLayers(eng.e, true, false, false);
+        render(eng.e, kRate / 2);
+        const auto x = render(eng.e, kRate * 10);
+        CHECK(std::fabs(toDb(rms(x, 0, x.size() / 2) / kBedRms)) < 0.5, "noise alone %.2f dB from the bed",
+              toDb(rms(x, 0, x.size() / 2) / kBedRms));
+    }
+    { // binaural only: a pure tone pair at the usual level
+        Engine eng;
+        startLayers(eng.e, false, true, false);
+        render(eng.e, kRate / 2);
+        const auto x = render(eng.e, kRate * 8);
+        const double left = toneAmplitude(x, 0, 180, 0, 8 * kRate);
+        const double right = toneAmplitude(x, 1, 184, 0, 8 * kRate);
+        CHECK(std::fabs(toDb(left / want)) < 0.2, "binaural alone, left %.2f dB from target", toDb(left / want));
+        CHECK(std::fabs(toDb(right / want)) < 0.2, "binaural alone, right %.2f dB from target", toDb(right / want));
+        // Nothing but the tone: its RMS is amplitude / sqrt 2.
+        CHECK(std::fabs(toDb(rms(x, 0, x.size() / 2) / (want / std::numbers::sqrt2))) < 0.2,
+              "binaural alone carries no noise");
+    }
+    { // boom only: the same strikes as the boom over the noise
+        Engine alone(kRate, 9), withNoise(kRate, 9), noiseOnly(kRate, 9);
+        startLayers(alone.e, false, false, true);
+        startLayers(withNoise.e, true, false, true);
+        startLayers(noiseOnly.e, true, false, false);
+        const auto a = render(alone.e, kRate * 8);
+        const auto boom = minus(render(withNoise.e, kRate * 8), render(noiseOnly.e, kRate * 8));
+        const double ra = rms(a, 0, a.size() / 2), rb = rms(boom, 0, boom.size() / 2);
+        CHECK(ra > 0.01, "boom alone sounds (rms %.4f)", ra);
+        CHECK(std::fabs(toDb(ra / rb)) < 0.2, "boom alone %.2f dB from the boom over noise", toDb(ra / rb));
+    }
+    { // all off: silence, while the session and its clock carry on
+        Engine eng;
+        startLayers(eng.e, false, false, false);
+        int result = 0;
+        const auto x = render(eng.e, kRate * 3, &result);
+        CHECK(soundingFrames(x) == 0, "all layers off renders silence");
+        CHECK(result == 1 && humspan_engine_is_playing(eng.e), "the silent session is still active");
+        CHECK(std::fabs(humspan_engine_elapsed_seconds(eng.e) - 3.0) < 1e-9, "clock ran to %.4f, want 3",
+              humspan_engine_elapsed_seconds(eng.e));
+
+        humspan_engine_set_noise(eng.e, 1); // a layer comes back on mid-session
+        render(eng.e, kRate / 2);
+        const auto back = render(eng.e, kRate * 5);
+        CHECK(std::fabs(toDb(rms(back, 0, back.size() / 2) / kBedRms)) < 0.5, "noise back at the bed level");
+    }
+}
+
+static void testNoiseToggleKeepsColorAndFades() {
+    std::printf("noise on/off fades, keeps the color, and leaves the beat alone\n");
+    const double want = kBedRms * 0.5 * std::numbers::sqrt2;
+    Engine eng;
+    startLayers(eng.e, true, true, false);
+    render(eng.e, kRate / 2);
+    const auto before = render(eng.e, kRate / 10);
+
+    humspan_engine_set_noise(eng.e, 0);
+    const auto fading = render(eng.e, kRate);
+    const double justAfter = rms(fading, 0, kRate / 200); // first 5 ms
+    CHECK(justAfter > 0.5 * rms(before, 0, before.size() / 2), "noise off fades rather than cutting");
+    const auto off = render(eng.e, kRate * 8);
+    CHECK(std::fabs(toDb(rms(off, 0, off.size() / 2) / (want / std::numbers::sqrt2))) < 0.2,
+          "only the beat is left once noise is off");
+    CHECK(std::fabs(toDb(toneAmplitude(off, 0, 180, 0, 8 * kRate) / want)) < 0.2, "the beat keeps its level");
+
+    // A color chosen while noise is off is the one that comes back.
+    humspan_engine_set_binaural(eng.e, 0);
+    humspan_engine_set_noise_color(eng.e, HUMSPAN_NOISE_BROWN);
+    render(eng.e, kRate);
+    humspan_engine_set_noise(eng.e, 1);
+    render(eng.e, kRate / 2);
+    const auto x = render(eng.e, kRate * 20);
+    const size_t n = 4096;
+    const auto psd = averagedPsd(x, n);
+    const double slope = 10.0 * std::log10(bandDensity(psd, 4000, 8000, n) / bandDensity(psd, 500, 1000, n)) / 3.0;
+    CHECK(std::fabs(slope + 6.0) < 0.5, "noise came back brown, slope %.2f dB/oct", slope);
+    CHECK(std::fabs(toDb(rms(x, 0, x.size() / 2) / 0.18) - 1.0) < 1.0, "brown back at its level");
+}
+
+static void testLayerLevels() {
+    std::printf("a layer level of 0.5 drops only that layer by 6 dB\n");
+    const double want = kBedRms * 0.5 * std::numbers::sqrt2;
+    const int64_t len = kRate * 8;
+    // Same seed throughout, so the layers separate by subtraction.
+    auto mix = [&](bool noise, bool binaural, bool boom, float noiseLevel, float binauralLevel, float boomLevel) {
+        Engine eng(kRate, 5);
+        humspan_engine_set_noise_level(eng.e, noiseLevel);
+        humspan_engine_set_binaural_level(eng.e, binauralLevel);
+        humspan_engine_set_boom_level(eng.e, boomLevel);
+        startLayers(eng.e, noise, binaural, boom);
+        return render(eng.e, len);
+    };
+    const auto noiseFull = mix(true, false, false, 1, 1, 1);
+    const auto noiseHalf = mix(true, false, false, 0.5f, 1, 1);
+    const auto toneFull = mix(false, true, false, 1, 1, 1);
+    const auto toneHalf = mix(false, true, false, 1, 0.5f, 1);
+    const auto boomFull = mix(false, false, true, 1, 1, 1);
+    const auto boomHalf = mix(false, false, true, 1, 1, 0.5f);
+    auto level = [](const std::vector<float>& x) { return rms(x, 0, x.size() / 2); };
+
+    CHECK(std::fabs(toDb(level(noiseHalf) / level(noiseFull)) + 6.02) < 0.2, "noise at 0.5 is %.2f dB",
+          toDb(level(noiseHalf) / level(noiseFull)));
+    CHECK(std::fabs(toDb(toneAmplitude(toneHalf, 0, 180, 0, len) / want) + 6.02) < 0.2, "binaural at 0.5 is %.2f dB",
+          toDb(toneAmplitude(toneHalf, 0, 180, 0, len) / want));
+    CHECK(std::fabs(toDb(level(boomHalf) / level(boomFull)) + 6.02) < 0.2, "boom at 0.5 is %.2f dB",
+          toDb(level(boomHalf) / level(boomFull)));
+
+    // Lowering one layer in the full mix leaves the other two as they were.
+    const auto all = mix(true, true, true, 1, 1, 1);
+    const auto lowNoise = mix(true, true, true, 0.5f, 1, 1);
+    const auto lowTone = mix(true, true, true, 1, 0.5f, 1);
+    const auto lowBoom = mix(true, true, true, 1, 1, 0.5f);
+    const auto others = minus(all, noiseFull); // binaural + boom
+    CHECK(level(minus(minus(lowNoise, noiseHalf), others)) < 1e-3, "noise level leaves the beat and boom");
+    CHECK(level(minus(minus(lowTone, toneHalf), minus(all, toneFull))) < 1e-3,
+          "binaural level leaves the noise and boom");
+    CHECK(level(minus(minus(lowBoom, boomHalf), minus(all, boomFull))) < 1e-3,
+          "boom level leaves the noise and beat");
+
+    // Clamped to [0, 1]: a level never raises a layer, and 0 silences it.
+    const auto over = mix(false, true, false, 1, 4.0f, 1);
+    CHECK(std::fabs(toDb(toneAmplitude(over, 0, 180, 0, len) / want)) < 0.2, "a level above 1 clamps to 1");
+    CHECK(soundingFrames(mix(true, true, true, 0, 0, 0)) == 0, "all levels at 0 are silent");
+}
+
+static void testLevelChangesDoNotClick() {
+    std::printf("moving a level mid-render does not click\n");
+    // A pure 184 Hz tone of amplitude A moves at most A * 2 pi f / rate per
+    // sample; an unsmoothed gain step would jump far beyond that.
+    const double want = kBedRms * 0.5 * std::numbers::sqrt2;
+    const double maxStep = want * 2.0 * std::numbers::pi * 184.0 / kRate;
+    Engine eng;
+    startLayers(eng.e, false, true, false);
+    render(eng.e, kRate / 2);
+    float largest = 0;
+    float prev[2] = {0, 0};
+    bool first = true;
+    for (float target : {0.1f, 1.0f, 0.0f, 0.8f}) {
+        humspan_engine_set_binaural_level(eng.e, target);
+        humspan_engine_set_noise(eng.e, 0); // a no-op toggle while the tone moves
+        const auto x = render(eng.e, kRate / 4);
+        for (size_t i = 0; i < x.size(); i += 2) {
+            for (int ch = 0; ch < 2; ++ch) {
+                if (!first) largest = std::max(largest, std::fabs(x[i + size_t(ch)] - prev[ch]));
+                prev[ch] = x[i + size_t(ch)];
+            }
+            first = false;
+        }
+    }
+    CHECK(largest < 1.1 * maxStep, "largest step %.5f, a click-free tone allows %.5f", largest, maxStep);
+}
+
 static void testFadeOutEndsInSilence() {
     std::printf("fade-out ends in silence\n");
     Engine eng;
@@ -541,6 +715,13 @@ static void testRenderDoesNotAllocate() {
         if (i == 2200) humspan_engine_start(eng.e, 5.0, 1.0, 1.0);
         if (i == 2500) humspan_engine_pause(eng.e, 0.1);
         if (i == 2700) humspan_engine_stop(eng.e, 1.0); // stop while paused
+        if (i == 50) humspan_engine_set_noise(eng.e, 0);
+        if (i == 120) humspan_engine_set_noise(eng.e, 1);
+        if (i % 90 == 0) humspan_engine_set_noise_level(eng.e, float(i % 11) / 10.0f);
+        if (i % 110 == 0) humspan_engine_set_binaural_level(eng.e, float(i % 13) / 12.0f);
+        if (i % 130 == 0) humspan_engine_set_boom_level(eng.e, float(i % 9) / 8.0f);
+        if (i == 1000) humspan_engine_set_noise(eng.e, 0); // all off mid-session
+        if (i == 1100) humspan_engine_set_noise(eng.e, 1);
         humspan_engine_render(eng.e, block.data(), kBlock);
     }
     g_trackAllocations = false;
@@ -559,6 +740,10 @@ int main() {
     testDuckLowersLevelAndKeepsClock();
     testBinauralBeatToneAndLevel();
     testBoomAlternatesEars();
+    testEachLayerAlone();
+    testNoiseToggleKeepsColorAndFades();
+    testLayerLevels();
+    testLevelChangesDoNotClick();
     testFadeOutEndsInSilence();
     testFadeInIsSmooth();
     testShortSessionShrinksBothFades();

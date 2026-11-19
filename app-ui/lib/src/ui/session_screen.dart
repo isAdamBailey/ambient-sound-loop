@@ -5,6 +5,7 @@ import 'package:humspan_native/humspan_native.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../session/session_controller.dart';
+import '../session/settings.dart';
 import 'controls.dart';
 import 'length_picker.dart';
 import 'theme.dart';
@@ -50,7 +51,7 @@ class _NarrowLayout extends StatelessWidget {
               children: [
                 Expanded(child: Center(child: _ClockBlock(c, wide: false))),
                 const SizedBox(height: 20),
-                _ColorBlock(c, wide: false),
+                _NoiseBlock(c, wide: false),
                 const SizedBox(height: 18),
                 _BinauralBlock(c),
                 const SizedBox(height: 18),
@@ -83,7 +84,7 @@ class _WideLayout extends StatelessWidget {
           children: [
             Expanded(flex: 5, child: _ClockBlock(c, wide: true)),
             gap,
-            Expanded(flex: 5, child: _ColorBlock(c, wide: true)),
+            Expanded(flex: 5, child: _NoiseBlock(c, wide: true)),
             gap,
             Expanded(flex: 4, child: _BinauralBlock(c)),
             gap,
@@ -161,32 +162,67 @@ class _PausedPill extends StatelessWidget {
   );
 }
 
-class _ColorBlock extends StatelessWidget {
-  const _ColorBlock(this.c, {required this.wide});
+class _NoiseBlock extends StatelessWidget {
+  const _NoiseBlock(this.c, {required this.wide});
   final SessionController c;
   final bool wide;
 
   static const _labels = {NoiseColor.white: 'White', NoiseColor.pink: 'Pink', NoiseColor.brown: 'Brown'};
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const BlockLabel('COLOR'),
-      const SizedBox(height: 8),
-      CellGrid(
-        columns: 3,
-        children: [
-          for (final color in NoiseColor.values)
-            ChoiceButton(
-              label: _labels[color]!,
-              selected: c.settings.color == color,
-              onPressed: () => c.setColor(color),
-            ),
-        ],
-      ),
-    ],
+  Widget build(BuildContext context) {
+    final on = c.settings.noiseOn;
+    final toggle = ChoiceButton(
+      label: on ? 'On' : 'Off',
+      semanticLabel: 'Noise',
+      selected: on,
+      onPressed: () => c.setNoise(!on),
+    );
+    // The colors stay usable while noise is off, ready for when it returns.
+    final colors = [
+      for (final color in NoiseColor.values)
+        ChoiceButton(
+          label: _labels[color]!,
+          selected: c.settings.color == color,
+          onPressed: () => c.setColor(color),
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const BlockLabel('NOISE'),
+        const SizedBox(height: 8),
+        // Wide blocks are narrow columns: the toggle gets its own row there.
+        if (wide) ...[
+          CellGrid(columns: 1, children: [toggle]),
+          const SizedBox(height: 8),
+          CellGrid(columns: 3, children: colors),
+        ] else
+          CellGrid(columns: 4, children: [toggle, ...colors]),
+        _LevelSlider(c, SoundLayer.noise),
+      ],
+    );
+  }
+}
+
+/// A layer's level slider, under its buttons. Usable while the layer is off.
+class _LevelSlider extends StatelessWidget {
+  const _LevelSlider(this.c, this.layer);
+  final SessionController c;
+  final SoundLayer layer;
+
+  static const _labels = {SoundLayer.noise: 'Noise level', SoundLayer.binaural: 'Binaural level', SoundLayer.boom: 'Boom level'};
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4),
+    child: LevelSlider(
+      label: _labels[layer]!,
+      value: c.settings.level(layer),
+      onChanged: (v) => c.setLevel(layer, v),
+      onChangeEnd: (_) => c.saveLevels(),
+    ),
   );
 }
 
@@ -222,6 +258,7 @@ class _BinauralBlock extends StatelessWidget {
             ),
           ],
         ),
+        _LevelSlider(c, SoundLayer.binaural),
       ],
     );
   }
@@ -259,6 +296,7 @@ class _BoomBlock extends StatelessWidget {
             ),
           ],
         ),
+        _LevelSlider(c, SoundLayer.boom),
       ],
     );
   }
@@ -323,21 +361,41 @@ class _PlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final playing = c.phase == SessionPhase.playing;
-    return SizedBox.square(
-      dimension: 80,
-      child: IconButton.filled(
-        onPressed: c.playOrStop,
-        style: IconButton.styleFrom(
-          backgroundColor: SessionColors.primary,
-          foregroundColor: SessionColors.background,
-          shape: const CircleBorder(),
+    final enabled = c.canPlay;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox.square(
+          dimension: 80,
+          child: IconButton.filled(
+            onPressed: enabled ? c.playOrStop : null,
+            style: IconButton.styleFrom(
+              backgroundColor: SessionColors.primary,
+              foregroundColor: SessionColors.background,
+              disabledBackgroundColor: SessionColors.surface,
+              disabledForegroundColor: SessionColors.secondary,
+              side: enabled ? null : const BorderSide(color: SessionColors.border),
+              shape: const CircleBorder(),
+            ),
+            icon: Icon(
+              playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
+              size: playing ? 34 : 40,
+              semanticLabel: playing ? 'Stop' : 'Play',
+            ),
+          ),
         ),
-        icon: Icon(
-          playing ? Icons.stop_rounded : Icons.play_arrow_rounded,
-          size: playing ? 34 : 40,
-          semanticLabel: playing ? 'Stop' : 'Play',
-        ),
-      ),
+        if (!enabled) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: 140,
+            child: Text(
+              'Turn on a sound to play.',
+              textAlign: TextAlign.center,
+              style: SessionText.weight(13, 400, color: SessionColors.secondary),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
