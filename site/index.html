@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Humspan: noise that never loops, for any length</title>
+  <meta name="description" content="Humspan makes white, pink and brown noise, a binaural beat and a slow boom in real time, so there is no recording to loop. Set any exact length and it fades out to true silence.">
+  <meta name="theme-color" content="#05090D">
+  <meta property="og:title" content="Humspan">
+  <meta property="og:description" content="Noise that never loops, for exactly as long as you need it.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/AtkinsonHyperlegibleNext.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="assets/fonts/AtkinsonHyperlegibleMono.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="assets/site.css">
+  <script>document.documentElement.classList.add("js")</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="wrap site-head">
+    <a class="mark" href="./" aria-label="Humspan home">
+      <img src="assets/icon.svg" alt="" width="26" height="26">
+      Humspan
+    </a>
+    <nav class="site-nav" aria-label="Site">
+      <a href="support/">Support</a>
+      <a href="privacy/">Privacy</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="wrap hero" aria-labelledby="hero-title">
+      <div class="hero-top">
+        <div>
+          <h1 id="hero-title">Sound for exactly as long as you need it.</h1>
+          <p class="lede">Humspan makes noise, a binaural beat and a slow boom <strong>as it plays</strong>, so there is no recording to loop. Set any length, from minutes to days. It fades out to true silence.</p>
+          <!-- When a store listing goes live, replace its <span class="store is-soon"> with
+               <a class="store" href="STORE URL">Download on the<br>App Store</a> (or the official badge). -->
+          <ul class="stores" aria-label="Get Humspan">
+            <li><span class="store is-soon"><small>Coming soon to the</small>App Store</span></li>
+            <li><span class="store is-soon"><small>Coming soon to</small>Google Play</span></li>
+          </ul>
+        </div>
+        <p class="readout" aria-label="Example session: 7 hours 37 minutes, ending at 6:19 AM">
+          <span class="clock" aria-hidden="true">7:37:00</span>
+          <span class="note" aria-hidden="true">session length · ends <time>6:19 AM</time></span>
+        </p>
+      </div>
+
+      <figure class="night" aria-label="An example session drawn from 10:42 PM to 6:19 AM: the sound fades in, runs without a loop point, and fades out to silence over its final minute.">
+        <div class="night-plot">
+          <svg viewBox="0 0 1000 176" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <line class="axis" x1="0" y1="80" x2="1000" y2="80"/>
+            <g class="trace-g"><path class="trace" vector-effect="non-scaling-stroke" d="M1 39.0V121.0M4 39.7V120.3M7 37.5V122.5M10 40.1V119.9M13 38.0V122.0M16 38.8V121.2M19 40.1V119.9M22 38.2V121.8M25 40.2V119.8M28 38.5V121.5M31 40.1V119.9M34 40.0V120.0M37 38.5V121.5M40 36.8V123.2M43 39.9V120.1M46 39.4V120.6M49 37.6V122.4M52 36.2V123.8M55 37.9V122.1M58 38.7V121.3M61 36.1V123.9M64 40.2V119.8M67 36.6V123.4M70 39.1V120.9M73 39.8V120.2M76 39.9V120.1M79 39.0V121.0M82 36.8V123.2M85 39.6V120.4M88 37.8V122.2M91 37.6V122.4M94 38.8V121.2M97 38.0V122.0M100 40.1V119.9M103 40.1V119.9M106 39.5V120.5M109 37.4V122.6M112 38.5V121.5M115 39.0V121.0M118 37.8V122.2M121 38.4V121.6M124 39.1V120.9M127 36.9V123.1M130 37.3V122.7M133 39.3V120.7M136 37.9V122.1M139 38.1V121.9M142 36.5V123.5M145 37.2V122.8M148 39.1V120.9M151 36.1V123.9M154 39.9V120.1M157 38.6V121.4M160 37.1V122.9M163 39.7V120.3M166 38.2V121.8M169 40.2V119.8M172 37.5V122.5M175 37.0V123.0M178 37.9V122.1M181 36.5V123.5M184 39.0V121.0M187 37.3V122.7M190 37.8V122.2M193 37.8V122.2M196 38.4V121.6M199 36.7V123.3M202 36.2V123.8M205 38.3V121.7M208 37.5V122.5M211 40.1V119.9M214 37.3V122.7M217 37.6V122.4M220 36.0V124.0M223 36.8V123.2M226 39.1V120.9M229 38.7V121.3M232 37.5V122.5M235 40.3V119.7M238 38.4V121.6M241 39.7V120.3M244 39.9V120.1M247 40.1V119.9M250 37.0V123.0M253 39.8V120.2M256 39.3V120.7M259 38.7V121.3M262 36.6V123.4M265 40.0V120.0M268 38.4V121.6M271 38.0V122.0M274 36.5V123.5M277 36.8V123.2M280 36.6V123.4M283 39.2V120.8M286 38.6V121.4M289 38.8V121.2M292 36.5V123.5M295 36.2V123.8M298 39.7V120.3M301 39.6V120.4M304 39.4V120.6M307 39.4V120.6M310 38.3V121.7M313 37.8V122.2M316 39.2V120.8M319 40.4V119.6M322 38.6V121.4M325 38.8V121.2M328 37.9V122.1M331 36.2V123.8M334 37.4V122.6M337 38.1V121.9M340 37.7V122.3M343 37.4V122.6M346 40.2V119.8M349 36.4V123.6M352 37.0V123.0M355 36.6V123.4M358 36.9V123.1M361 38.7V121.3M364 38.6V121.4M367 39.9V120.1M370 37.6V122.4M373 40.1V119.9M376 40.1V119.9M379 39.5V120.5M382 39.7V120.3M385 38.9V121.1M388 40.2V119.8M391 40.4V119.6M394 39.7V120.3M397 40.0V120.0M400 38.8V121.2M403 40.3V119.7M406 36.6V123.4M409 37.7V122.3M412 39.7V120.3M415 39.3V120.7M418 38.9V121.1M421 38.8V121.2M424 39.9V120.1M427 36.7V123.3M430 36.0V124.0M433 38.3V121.7M436 38.3V121.7M439 40.0V120.0M442 40.0V120.0M445 38.9V121.1M448 39.2V120.8M451 36.8V123.2M454 39.7V120.3M457 40.3V119.7M460 36.2V123.8M463 38.1V121.9M466 39.8V120.2M469 38.0V122.0M472 40.3V119.7M475 38.1V121.9M478 36.1V123.9M481 36.6V123.4M484 37.3V122.7M487 39.3V120.7M490 38.8V121.2M493 39.7V120.3M496 37.0V123.0M499 38.1V121.9M502 37.0V123.0M505 38.9V121.1M508 39.4V120.6M511 36.8V123.2M514 36.1V123.9M517 36.6V123.4M520 36.9V123.1M523 36.8V123.2M526 37.1V122.9M529 39.4V120.6M532 38.1V121.9M535 38.8V121.2M538 40.3V119.7M541 40.3V119.7M544 39.2V120.8M547 39.3V120.7M550 37.4V122.6M553 36.2V123.8M556 38.4V121.6M559 36.3V123.7M562 36.1V123.9M565 36.2V123.8M568 38.8V121.2M571 39.4V120.6M574 39.4V120.6M577 39.5V120.5M580 39.5V120.5M583 37.7V122.3M586 36.4V123.6M589 36.7V123.3M592 38.3V121.7M595 37.5V122.5M598 36.9V123.1M601 40.0V120.0M604 37.5V122.5M607 36.4V123.6M610 37.0V123.0M613 37.1V122.9M616 38.3V121.7M619 39.6V120.4M622 36.9V123.1M625 38.9V121.1M628 36.9V123.1M631 36.1V123.9M634 38.7V121.3M637 38.6V121.4M640 36.2V123.8M643 37.2V122.8M646 39.7V120.3M649 39.8V120.2M652 39.7V120.3M655 36.4V123.6M658 36.9V123.1M661 39.8V120.2M664 36.8V123.2M667 36.1V123.9M670 37.5V122.5M673 38.9V121.1M676 38.0V122.0M679 39.8V120.2M682 40.3V119.7M685 36.1V123.9M688 37.5V122.5M691 38.1V121.9M694 36.3V123.7M697 38.5V121.5M700 36.6V123.4M703 36.8V123.2M706 39.5V120.5M709 39.3V120.7M712 39.1V120.9M715 39.3V120.7M718 37.8V122.2M721 39.3V120.7M724 38.6V121.4M727 39.8V120.2M730 36.4V123.6M733 38.8V121.2M736 38.4V121.6M739 37.8V122.2M742 36.4V123.6M745 38.5V121.5M748 36.4V123.6M751 38.2V121.8M754 38.1V121.9M757 38.1V121.9M760 40.3V119.7M763 38.5V121.5M766 39.6V120.4M769 40.4V119.6M772 36.9V123.1M775 39.6V120.4M778 38.3V121.7M781 37.2V122.8M784 38.0V122.0M787 39.0V121.0M790 38.1V121.9M793 38.0V122.0M796 36.9V123.1M799 39.9V120.1M802 37.9V122.1M805 39.3V120.7M808 39.2V120.8M811 37.0V123.0M814 38.2V121.8M817 37.9V122.1M820 37.1V122.9M823 36.4V123.6M826 38.4V121.6M829 37.7V122.3M832 38.2V121.8M835 38.1V121.9M838 37.4V122.6M841 38.4V121.6M844 38.1V121.9M847 38.3V121.7M850 36.3V123.7M853 37.3V122.7M856 36.5V123.5M859 36.3V123.7M862 39.3V120.7M865 37.9V122.1M868 36.2V123.8M871 36.7V123.3M874 39.8V120.2M877 39.9V120.1M880 38.5V121.5M883 40.1V119.9M886 39.3V120.7M889 40.1V119.9M892 37.5V122.5M895 37.0V123.0M898 36.5V123.5M901 39.7V120.3M904 37.2V122.8M907 37.5V122.5M910 39.8V120.2M913 36.5V123.5M916 36.1V123.9M919 39.4V120.6M922 36.2V123.8M925 38.6V121.4M928 38.3V121.7M931 36.0V124.0M934 36.7V123.3M937 39.7V120.3M940 38.5V121.5M943 38.1V121.9M946 38.9V121.1M949 39.5V120.5M952 39.0V121.0M955 37.2V122.8M958 40.3V119.7M961 38.0V122.0M964 38.5V121.5M967 40.3V119.7M970 38.9V121.1M973 37.7V122.3M976 38.1V121.9M979 40.1V119.9M982 36.1V123.9M985 36.9V123.1M988 36.1V123.9M991 39.9V120.1M994 39.2V120.8M997 40.2V119.8"/></g>
+            <line class="axis" x1="0" y1="168" x2="1000" y2="168" vector-effect="non-scaling-stroke"/>
+            <g vector-effect="non-scaling-stroke">
+              <line class="tick end" x1="0.5" y1="0" x2="0.5" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick end" x1="999.5" y1="0" x2="999.5" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="39.4" y1="160" x2="39.4" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="170.7" y1="160" x2="170.7" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="302" y1="160" x2="302" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="433.3" y1="160" x2="433.3" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="564.6" y1="160" x2="564.6" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="695.8" y1="160" x2="695.8" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="827.1" y1="160" x2="827.1" y2="176" vector-effect="non-scaling-stroke"/>
+              <line class="tick" x1="958.4" y1="160" x2="958.4" y2="176" vector-effect="non-scaling-stroke"/>
+            </g>
+          </svg>
+          <div class="pin pin-start" aria-hidden="true"><span>10:42 PM</span></div>
+          <div class="pin pin-span" aria-hidden="true"><span>7h 37m</span></div>
+          <div class="pin pin-end" aria-hidden="true"><span>6:19 AM</span></div>
+          <div class="cursor" aria-hidden="true"><span></span></div>
+        </div>
+        <div class="hours" aria-hidden="true">
+          <span class="minor" style="left:3.94%">11 PM</span>
+          <span style="left:17.07%">12 AM</span>
+          <span class="minor" style="left:30.2%">1 AM</span>
+          <span style="left:43.33%">2 AM</span>
+          <span class="minor" style="left:56.46%">3 AM</span>
+          <span style="left:69.58%">4 AM</span>
+          <span class="minor" style="left:82.71%">5 AM</span>
+          <span style="left:95.84%">6 AM</span>
+        </div>
+        <ol class="entries">
+          <li tabindex="0"><time>10:42 PM</time>Play. The sound fades in over 5 seconds.</li>
+          <li tabindex="0"><span class="at mono">7h 37m</span>No loop point. Every sample is made as it plays.</li>
+          <li tabindex="0"><time>6:19 AM</time>The final minute fades to true silence.</li>
+        </ol>
+      </figure>
+    </section>
+
+    <section class="wrap section" aria-labelledby="layers-title">
+      <h2 id="layers-title">Three layers, one screen.</h2>
+      <p class="intro">Turn on any mix of them. Each has its own level, and every change is smoothed, so nothing clicks.</p>
+      <div class="layers">
+        <div class="layer">
+          <h3>Noise</h3>
+          <ul class="words" aria-label="Colors">
+            <li>White</li><li>Pink</li><li class="on">Brown</li>
+          </ul>
+          <p>Colored noise. White is flat, pink is softer at the top, brown is deep and round. Change color mid-session without a seam.</p>
+        </div>
+        <div class="layer">
+          <h3>Binaural beat</h3>
+          <ul class="words" aria-label="Beat">
+            <li class="figure">2 Hz</li><li class="figure on">4 Hz</li><li class="figure">…</li><li class="figure">10 Hz</li>
+          </ul>
+          <p>Two tones, one in each ear, a few hertz apart. Labelled by frequency, nothing more. Best on headphones.</p>
+        </div>
+        <div class="layer">
+          <h3>Boom <span class="sub"><span class="sr">left and right</span><span aria-hidden="true">left <svg class="lr" viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg> right</span></span></h3>
+          <ul class="words" aria-label="Every">
+            <li class="figure on">8 s</li><li class="figure">4 s</li><li class="figure">2 s</li>
+          </ul>
+          <p>A low, resonant strike that alternates ears, every 8, 4 or 2 seconds. Off until you turn it on.</p>
+        </div>
+        <div class="aside-row">
+          <b>Mono</b>
+          <span>The same sound in both ears, for listening with one earbud.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap section" aria-labelledby="length-title">
+      <div class="length">
+        <div>
+          <div class="dial" aria-hidden="true">
+            <svg viewBox="0 0 220 220">
+              <circle cx="110" cy="110" r="96" fill="none" stroke="#1A232B" stroke-width="10"/>
+              <g stroke="#2A343C" stroke-width="2" stroke-linecap="round">
+                <line x1="110" y1="22" x2="110" y2="34"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(30 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(60 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="34" transform="rotate(90 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(120 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(150 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="34" transform="rotate(180 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(210 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(240 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="34" transform="rotate(270 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(300 110 110)"/>
+                <line x1="110" y1="22" x2="110" y2="29" transform="rotate(330 110 110)"/>
+              </g>
+              <path d="M110 14 A96 96 0 0 1 181.9 46.4" fill="none" stroke="#4F7F95" stroke-width="10"/>
+              <circle cx="181.9" cy="46.4" r="11" fill="#D6CCB2"/>
+              <circle cx="181.9" cy="46.4" r="3" fill="#05090D"/>
+            </svg>
+            <div class="dial-center">
+              <div class="dial-clock">1:37:00</div>
+              <div class="dial-note">session length</div>
+              <div class="dial-note">ends <span class="mono">12:19 AM</span></div>
+            </div>
+          </div>
+          <ul class="stops" aria-hidden="true">
+            <li>30m</li><li>1h</li><li>2h</li><li>4h</li><li>8h</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 12c-2-2.7-3.6-4-5.5-4a4 4 0 0 0 0 8c1.9 0 3.5-1.3 5.5-4zm0 0c2 2.7 3.6 4 5.5 4a4 4 0 0 0 0-8c-1.9 0-3.5 1.3-5.5 4z"/></svg></li>
+          </ul>
+        </div>
+        <div class="length-copy">
+          <h2 id="length-title">Any exact length.</h2>
+          <p>Drag the dial in 5-minute steps, tap a preset, or type an exact time such as <strong class="mono">1h 37m 15s</strong>. Or choose <strong>Until I stop</strong> and it runs for days.</p>
+          <p>The clock is kept in played audio, not a timer the phone can throttle, so a session ends when it says it will, then fades out over its final minute.</p>
+          <p>Humspan opens with your last settings, stopped. It never plays on its own.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="wrap section" aria-labelledby="never-title">
+      <h2 id="never-title">What it won’t do.</h2>
+      <p class="intro">You set it once and put the phone down. After that, nothing should surprise you.</p>
+      <ul class="nevers">
+        <li><b>Loop</b><span>There is no file to repeat. The engine generates every sample in real time, for as long as the session runs.</span></li>
+        <li><b>Jump to the speaker</b><span>If headphones or Bluetooth disconnect, the session pauses. It resumes only when you press Play.</span></li>
+        <li><b>Stop abruptly</b><span>A timed session fades over its final minute and ends in silence. A call lowers the sound and the clock keeps time.</span></li>
+        <li><b>Ask for anything</b><span>No account and no sign-in. Nothing you do in the app leaves your phone. <a href="privacy/">Privacy</a></span></li>
+      </ul>
+    </section>
+
+    <section class="wrap close" aria-labelledby="close-title">
+      <img src="assets/icon.svg" alt="" width="72" height="72">
+      <h2 id="close-title">Set it once. Put the phone down.</h2>
+      <p>Humspan is coming to iPhone, iPad and Android.</p>
+      <ul class="stores" aria-label="Get Humspan">
+        <li><span class="store is-soon"><small>Coming soon to the</small>App Store</span></li>
+        <li><span class="store is-soon"><small>Coming soon to</small>Google Play</span></li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap">
+      <span>© 2026 <a href="https://adambailey.io">Adam Bailey</a></span>
+      <nav aria-label="Footer">
+        <a href="support/">Support</a>
+        <a href="privacy/">Privacy</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="assets/night.js" defer></script>
+</body>
+</html>
