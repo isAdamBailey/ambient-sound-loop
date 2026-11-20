@@ -70,6 +70,23 @@ The desktop window is titled Humspan and will not shrink below 360×640. Loudnes
 
 **Android phone:** Settings → About phone → tap *Build number* seven times, then Settings → System → Developer options → *USB debugging* on. Connect by USB, accept the "Allow USB debugging?" prompt on the phone, and check that it appears in `adb devices` and `flutter devices`.
 
+**Android release signing:** release builds sign with the Play upload key and fail if `app-ui/android/key.properties` is missing; debug and profile builds keep the debug key. Create the key once, outside the repo, and back up the file and both passwords:
+
+```bash
+keytool -genkey -v -keystore ~/keys/humspan-upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+```
+
+Then create `app-ui/android/key.properties` (git ignores it, along with `*.jks` and `*.keystore`):
+
+```properties
+storeFile=/Users/<you>/keys/humspan-upload.jks
+storePassword=…
+keyAlias=upload
+keyPassword=…
+```
+
+`cd app-ui && flutter build appbundle --release` writes `build/app/outputs/bundle/release/app-release.aab`. The version is the `version:` line in `pubspec.yaml` (`name+code`); raise the number after `+` for every upload. Store listing text and assets are in `docs/store/`.
+
 ## Listen
 
 ```bash
