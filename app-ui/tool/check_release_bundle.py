@@ -215,6 +215,15 @@ def check_version_code(version_code, last):
     return []
 
 
+def check_target_sdk(target_sdk):
+    if target_sdk is None or not target_sdk.isdigit():
+        return ["no numeric targetSdk in the manifest (%s)" % target_sdk]
+    if int(target_sdk) < MIN_TARGET_SDK:
+        return ["targetSdk %s is below Play's minimum %d; raise targetSdkVersion"
+                % (target_sdk, MIN_TARGET_SDK)]
+    return []
+
+
 def check_permissions(permissions):
     problems = []
     for p in permissions:
@@ -261,6 +270,7 @@ def main(argv=None):
     problems = []
     problems += check_signer(signer, verified, args.strict)
     problems += check_version_code(facts.get("versionCode"), args.last_version_code)
+    problems += check_target_sdk(facts.get("targetSdk"))
     problems += check_permissions(permissions)
 
     print("bundle: %s" % args.bundle)

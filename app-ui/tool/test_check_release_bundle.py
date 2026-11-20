@@ -207,7 +207,6 @@ def main():
         fewer = fx.bundle(permissions=GOOD_PERMISSIONS[:2])
         expect("a subset of the allowlist passes", fewer, 0, "--non-strict")
 
-        # Next slice (written, not yet run: the worktree vanished before this cycle).
         old_target = fx.bundle(target_sdk=crb.MIN_TARGET_SDK - 1)
         expect("targetSdk below the minimum fails", old_target, 1, "--non-strict",
                contains=["targetSdk"])
