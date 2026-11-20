@@ -29,6 +29,7 @@ core-cpp/                 libhumspansynth (C++20)
 platform-audio/desktop/   humspan_play: miniaudio harness for listening tests
 platform-audio/player/    the app's output stream (engine + miniaudio)
 app-ui/                   the session screen (Flutter)
+site/                     marketing site: home, privacy policy, support (static; see docs/site.md)
 docs/PLAN.md              design and roadmap
 ```
 

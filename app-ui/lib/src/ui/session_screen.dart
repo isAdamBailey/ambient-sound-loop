@@ -15,6 +15,7 @@ import '../session/session_controller.dart';
 import '../session/settings.dart';
 import 'controls.dart';
 import 'length_picker.dart';
+import 'privacy.dart';
 import 'session_dial.dart';
 import 'theme.dart';
 
@@ -22,9 +23,12 @@ import 'theme.dart';
 const wideBreakpoint = 900.0;
 
 class SessionScreen extends StatelessWidget {
-  const SessionScreen({super.key, required this.controller});
+  const SessionScreen({super.key, required this.controller, this.onPrivacy = openPrivacyPolicy});
 
   final SessionController controller;
+
+  /// Opens the privacy policy; tests replace it.
+  final VoidCallback onPrivacy;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +38,8 @@ class SessionScreen extends StatelessWidget {
       body: SafeArea(
         child: ListenableBuilder(
           listenable: controller,
-          builder: (context, _) => wide ? _WideLayout(controller) : _NarrowLayout(controller),
+          builder: (context, _) =>
+              wide ? _WideLayout(controller, onPrivacy) : _NarrowLayout(controller, onPrivacy),
         ),
       ),
     );
@@ -47,8 +52,9 @@ Future<void> _openExact(BuildContext context, SessionController c, {required boo
 }
 
 class _NarrowLayout extends StatelessWidget {
-  const _NarrowLayout(this.c);
+  const _NarrowLayout(this.c, this.onPrivacy);
   final SessionController c;
+  final VoidCallback onPrivacy;
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +83,7 @@ class _NarrowLayout extends StatelessWidget {
                   ..._layers(c),
                   _MonoRow(c),
                   const Expanded(child: SizedBox(height: 16)),
-                  _PlayRow(c),
+                  _PlayRow(c, onPrivacy),
                 ],
               ),
             ),
@@ -89,8 +95,9 @@ class _NarrowLayout extends StatelessWidget {
 }
 
 class _WideLayout extends StatelessWidget {
-  const _WideLayout(this.c);
+  const _WideLayout(this.c, this.onPrivacy);
   final SessionController c;
+  final VoidCallback onPrivacy;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -120,7 +127,7 @@ class _WideLayout extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [..._layers(c), _MonoRow(c), const SizedBox(height: 28), _PlayRow(c)],
+                children: [..._layers(c), _MonoRow(c), const SizedBox(height: 28), _PlayRow(c, onPrivacy)],
               ),
             ),
           ],
@@ -412,10 +419,12 @@ class _PausedStatus extends StatelessWidget {
   );
 }
 
-/// Play/Stop, the screen's one solid shape, with a line saying what plays.
+/// Play/Stop, the screen's one solid shape, with a line saying what plays,
+/// and a faded Privacy link at the end of the row.
 class _PlayRow extends StatelessWidget {
-  const _PlayRow(this.c);
+  const _PlayRow(this.c, this.onPrivacy);
   final SessionController c;
+  final VoidCallback onPrivacy;
 
   @override
   Widget build(BuildContext context) {
@@ -461,6 +470,25 @@ class _PlayRow extends StatelessWidget {
         const SizedBox(width: 16),
         Expanded(
           child: Text(note, style: SessionText.note, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ),
+        TextButton(
+          onPressed: onPrivacy,
+          style: TextButton.styleFrom(
+            minimumSize: const Size(64, 44),
+            foregroundColor: SessionColors.dim,
+            overlayColor: SessionColors.seaDeep,
+          ),
+          child: Semantics(
+            link: true,
+            child: Text(
+              'Privacy',
+              style: SessionText.weight(
+                14,
+                400,
+                color: SessionColors.dim,
+              ).copyWith(decoration: TextDecoration.underline, decorationColor: SessionColors.dim),
+            ),
+          ),
         ),
       ],
     );

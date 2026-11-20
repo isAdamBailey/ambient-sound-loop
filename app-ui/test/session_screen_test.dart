@@ -439,6 +439,29 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('a Privacy link beside Play opens the policy', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      var opened = 0;
+      final c = SessionController(
+        audio: FakeAudio(),
+        settings: SessionSettings.firstLaunch,
+        reroute: RerouteBehavior.ignore,
+        onSettingsChanged: (_) {},
+      );
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        MaterialApp(theme: sessionTheme(), home: SessionScreen(controller: c, onPrivacy: () => opened++)),
+      );
+      final link = find.text('Privacy');
+      expect(link, findsOneWidget);
+      expect(tester.getCenter(link).dy, closeTo(tester.getCenter(find.bySemanticsLabel('Play')).dy, 1));
+      expect(tester.getBottomRight(link).dy, lessThanOrEqualTo(844), reason: 'still fits without scrolling');
+      await tester.tap(link);
+      expect(opened, 1);
+    });
+
     testWidgets('no sleep, health or entrainment wording', (tester) async {
       await pumpScreen(tester, const Size(390, 844));
       final words = RegExp(r'sleep|health|brain|entrain|focus|relax|calm|anxi', caseSensitive: false);
