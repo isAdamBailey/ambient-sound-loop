@@ -72,6 +72,8 @@ void main(List<String> args) async {
         // Link the Apple frameworks directly (App Store and notarization).
         if (apple) 'MA_NO_RUNTIME_LINKING': null,
       },
+      // No -z max-page-size=16384 for Android: NDK r28+ (Flutter's
+      // ndkVersion) already aligns LOAD segments to 16 KB. See README.
       flags: [if (os == OS.windows) '/EHsc'],
       // Android's default c++_shared needs libc++_shared.so, which is not in
       // the apk. The C ABI never passes C++ objects out of this library.

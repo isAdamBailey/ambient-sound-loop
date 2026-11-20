@@ -87,6 +87,15 @@ keyPassword=…
 
 `cd app-ui && flutter build appbundle --release` writes `build/app/outputs/bundle/release/app-release.aab`. The version is the `version:` line in `pubspec.yaml` (`name+code`); raise the number after `+` for every upload. Store listing text and assets are in `docs/store/`.
 
+**16 KB pages:** Play requires every native library to load on 16 KB page devices, so each ELF `LOAD` segment must be aligned to at least `0x4000`. NDK r28 and later link that way by default, and Flutter's `ndkVersion` (28.2.13676358) builds `libhumspan_native.so`, so the hook passes no `-z max-page-size` flag. To check a bundle:
+
+```bash
+unzip -o -q build/app/outputs/bundle/release/app-release.aab 'base/lib/*' -d /tmp/aab
+for f in /tmp/aab/base/lib/*/*.so; do echo "$f $(llvm-readelf -lW "$f" | awk '/LOAD/{print $NF}' | sort -u | xargs)"; done
+```
+
+Every line should end in `0x4000` or `0x10000` (64 KB also works on 16 KB devices). `llvm-readelf` is in the NDK under `toolchains/llvm/prebuilt/*/bin/`.
+
 ## Listen
 
 ```bash
