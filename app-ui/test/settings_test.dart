@@ -22,6 +22,7 @@ void main() {
     expect(settings.color, NoiseColor.pink);
     expect(settings.length, SessionLength.timed(const Duration(hours: 8)));
     expect(settings.binauralOn, isFalse);
+    expect(settings.mono, isFalse, reason: 'stereo by default');
     expect(settings.beatHz, 4);
     expect(settings.boomOn, isFalse);
     expect(settings.boomSeconds, 8);
@@ -39,6 +40,7 @@ void main() {
       noiseLevel: 0.25,
       binauralLevel: 0.5,
       boomLevel: 0,
+      mono: true,
     );
     await SettingsStore(SharedPreferencesAsync()).save(saved);
     expect(await SettingsStore(SharedPreferencesAsync()).load(), saved);

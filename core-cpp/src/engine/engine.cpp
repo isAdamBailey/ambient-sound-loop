@@ -107,6 +107,7 @@ struct humspan_engine {
     std::atomic<bool> boom{false};
     std::atomic<float> boomInterval{kDefaultBoomSeconds};
     std::atomic<bool> speaker{false};
+    std::atomic<bool> mono{false};
 
     // ---- audio -> control ----
     std::atomic<double> elapsedReport{0.0};
@@ -129,6 +130,7 @@ struct humspan_engine {
     float binauralGain = 0.0f;    // on/off x kBinauralMix x level, smoothed
     float boomGain = 0.0f;        // on/off x level, smoothed
     float speakerMix = 0.0f;      // 0: deep boom, 1: speaker boom, smoothed
+    float monoMix = 0.0f;         // 0: stereo, 1: both ears hear the same, smoothed
     SineOscillator tones[2]; // left: carrier, right: carrier + beat
     ResonantBoom resonator{kDeepBoom};
     ResonantBoom speakerResonator{kSpeakerBoom}; // strikes in step with resonator
@@ -298,6 +300,7 @@ struct humspan_engine {
         const bool boomOn = boom.load(std::memory_order_relaxed);
         const float targetBoom = boomOn ? boomLevel.load(std::memory_order_relaxed) : 0.0f;
         const float targetSpeaker = speaker.load(std::memory_order_relaxed) ? 1.0f : 0.0f;
+        const float targetMono = mono.load(std::memory_order_relaxed) ? 1.0f : 0.0f;
         const double boomEvery = static_cast<double>(boomInterval.load(std::memory_order_relaxed));
         if (snapGains) {
             snapGains = false;
@@ -311,6 +314,7 @@ struct humspan_engine {
             binauralGain = targetBinaural;
             boomGain = targetBoom;
             speakerMix = targetSpeaker;
+            monoMix = targetMono;
         }
         const double toneStep[2] = {
             kCarrierHz * invRate,
@@ -345,6 +349,12 @@ struct humspan_engine {
             binauralGain += smoothCoeff * (targetBinaural - binauralGain);
             boomGain += smoothCoeff * (targetBoom - boomGain);
             speakerMix += smoothCoeff * (targetSpeaker - speakerMix);
+            monoMix += smoothCoeff * (targetMono - monoMix);
+            if (std::fabs(targetMono - monoMix) < 1e-4f) {
+                // Land exactly: the equal-power bed weights below would
+                // otherwise leave the right ear's own noise at about -44 dB.
+                monoMix = targetMono;
+            }
             // Noise filters keep running while audible or fading in; skipped
             // only once the layer is off and fully silent.
             const bool noiseAudible = noiseGain > kSilent || noiseOn;
@@ -359,36 +369,58 @@ struct humspan_engine {
             }
             const float gain = smoothedVolume * smoothedDuck * static_cast<float>(env);
 
+            float bed[2] = {0.0f, 0.0f};
+            float tone[2] = {0.0f, 0.0f};
+            float drum[2] = {0.0f, 0.0f};
             for (int ch = 0; ch < 2; ++ch) {
                 Channel& chan = channels[ch];
                 // The generator always advances, so the noise stream (and
                 // determinism) does not depend on when noise was switched.
                 const float white = chan.rng.bipolar();
-                float bed = 0.0f;
                 if (noiseAudible) {
                     if (colorGain[HUMSPAN_NOISE_WHITE] > kSilent) {
-                        bed += colorGain[HUMSPAN_NOISE_WHITE] * white * kWhiteGain;
+                        bed[ch] += colorGain[HUMSPAN_NOISE_WHITE] * white * kWhiteGain;
                     }
                     // Filters keep running while audible or fading in; skipped
                     // only when fully silent (their state then fades in from 0).
                     if (colorGain[HUMSPAN_NOISE_PINK] > kSilent || targetColor == HUMSPAN_NOISE_PINK) {
-                        bed += colorGain[HUMSPAN_NOISE_PINK] * chan.pink.process(white);
+                        bed[ch] += colorGain[HUMSPAN_NOISE_PINK] * chan.pink.process(white);
                     }
                     if (colorGain[HUMSPAN_NOISE_BROWN] > kSilent || targetColor == HUMSPAN_NOISE_BROWN) {
-                        bed += colorGain[HUMSPAN_NOISE_BROWN] * chan.brown.process(white);
+                        bed[ch] += colorGain[HUMSPAN_NOISE_BROWN] * chan.brown.process(white);
                     }
-                    bed *= noiseGain * smoothedNoiseLevel;
+                    bed[ch] *= noiseGain * smoothedNoiseLevel;
                 }
-                float layer = 0.0f;
                 if (toneAudible) {
-                    layer += binauralGain * tones[ch].process(toneStep[ch]);
+                    tone[ch] = binauralGain * tones[ch].process(toneStep[ch]);
                 }
                 if (boomAudible) {
                     const float deep = resonator.sample(ch);
                     const float small = speakerResonator.sample(ch);
-                    layer += boomGain * (deep + speakerMix * (small - deep));
+                    drum[ch] = boomGain * (deep + speakerMix * (small - deep));
                 }
-                out[2 * n + ch] = softClip(holdBed(bed * gain) + layer * gain);
+            }
+            // Mono: both ears hear the same thing, each layer at its stereo
+            // loudness. The noise bed is the left ear's (the two ears' beds
+            // are independent, so averaging them would lose 3 dB, and the
+            // switch crossfades the right ear at equal power for the same
+            // reason, so it never dips on the way); the two
+            // beat tones sum at equal power, so each ear hears both and the
+            // beat becomes an audible pulse; the boom's two ears sum, so
+            // every strike lands in both at full weight.
+            if (monoMix > 0.0f) {
+                const float monoTone = (tone[0] + tone[1]) * std::numbers::sqrt2_v<float> * 0.5f;
+                const float monoDrum = drum[0] + drum[1];
+                bed[1] = monoMix >= 1.0f
+                             ? bed[0]
+                             : std::sqrt(1.0f - monoMix) * bed[1] + std::sqrt(monoMix) * bed[0];
+                for (int ch = 0; ch < 2; ++ch) {
+                    tone[ch] += monoMix * (monoTone - tone[ch]);
+                    drum[ch] += monoMix * (monoDrum - drum[ch]);
+                }
+            }
+            for (int ch = 0; ch < 2; ++ch) {
+                out[2 * n + ch] = softClip(holdBed(bed[ch] * gain) + (tone[ch] + drum[ch]) * gain);
             }
             if (boomAudible) {
                 resonator.advance(boomEvery);
@@ -511,6 +543,12 @@ void humspan_engine_set_boom_interval(humspan_engine* engine, float seconds) {
 void humspan_engine_set_speaker_output(humspan_engine* engine, int speaker) {
     if (engine != nullptr) {
         engine->speaker.store(speaker != 0, std::memory_order_relaxed);
+    }
+}
+
+void humspan_engine_set_mono(humspan_engine* engine, int mono) {
+    if (engine != nullptr) {
+        engine->mono.store(mono != 0, std::memory_order_relaxed);
     }
 }
 

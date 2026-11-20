@@ -34,6 +34,8 @@ class FakeAudio implements AudioPort {
   @override
   void setSpeakerOutput(bool speaker) => calls.add('speaker $speaker');
   @override
+  void setMono(bool mono) => calls.add('mono $mono');
+  @override
   bool start({required double duration, required double fadeIn, required double fadeOut}) {
     calls.add('start $duration $fadeIn $fadeOut');
     return true;

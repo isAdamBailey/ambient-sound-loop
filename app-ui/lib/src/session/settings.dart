@@ -32,11 +32,12 @@ class SessionSettings {
     this.noiseLevel = 1,
     this.binauralLevel = 1,
     this.boomLevel = 1,
+    this.mono = false,
   });
 
   /// Noise on (Pink), 8 h, binaural off, boom off. The beat starts at 4 Hz
-  /// and the boom at 8 s; every level slider at 100 %. Loudness is the
-  /// device volume.
+  /// and the boom at 8 s; every level slider at 100 %; stereo. Loudness is
+  /// the device volume.
   static const firstLaunch = SessionSettings(
     noiseOn: true,
     color: NoiseColor.pink,
@@ -59,6 +60,9 @@ class SessionSettings {
   final double noiseLevel;
   final double binauralLevel;
   final double boomLevel;
+
+  /// The same sound in both ears, for listening with one ear. Off: stereo.
+  final bool mono;
 
   /// At least one layer is switched on (a level of 0 still counts as on).
   bool get anyLayerOn => noiseOn || binauralOn || boomOn;
@@ -92,6 +96,7 @@ class SessionSettings {
     double? noiseLevel,
     double? binauralLevel,
     double? boomLevel,
+    bool? mono,
   }) => SessionSettings(
     noiseOn: noiseOn ?? this.noiseOn,
     color: color ?? this.color,
@@ -103,6 +108,7 @@ class SessionSettings {
     noiseLevel: noiseLevel ?? this.noiseLevel,
     binauralLevel: binauralLevel ?? this.binauralLevel,
     boomLevel: boomLevel ?? this.boomLevel,
+    mono: mono ?? this.mono,
   );
 
   @override
@@ -117,7 +123,8 @@ class SessionSettings {
       other.boomSeconds == boomSeconds &&
       other.noiseLevel == noiseLevel &&
       other.binauralLevel == binauralLevel &&
-      other.boomLevel == boomLevel;
+      other.boomLevel == boomLevel &&
+      other.mono == mono;
 
   @override
   int get hashCode => Object.hash(
@@ -131,6 +138,7 @@ class SessionSettings {
     noiseLevel,
     binauralLevel,
     boomLevel,
+    mono,
   );
 
   @override
@@ -138,7 +146,8 @@ class SessionSettings {
       'SessionSettings(noise ${noiseOn ? 'on' : 'off'} ${color.name} $noiseLevel, '
       '${length.tileText}, '
       'binaural ${binauralOn ? 'on' : 'off'} $beatHz Hz $binauralLevel, '
-      'boom ${boomOn ? 'on' : 'off'} ${boomSeconds}s $boomLevel)';
+      'boom ${boomOn ? 'on' : 'off'} ${boomSeconds}s $boomLevel, '
+      '${mono ? 'mono' : 'stereo'})';
 }
 
 /// The bottom of a level slider's dB taper: quiet, never silent. Only a
@@ -170,6 +179,7 @@ class SettingsStore {
   static const _noiseLevel = 'noiseLevel';
   static const _binauralLevel = 'binauralLevel';
   static const _boomLevel = 'boomLevel';
+  static const _mono = 'mono';
 
   Future<SessionSettings> load() async {
     const d = SessionSettings.firstLaunch;
@@ -180,6 +190,7 @@ class SettingsStore {
     final beat = await _prefs.getInt(_beat);
     final boom = await _prefs.getBool(_boom);
     final boomSeconds = await _prefs.getInt(_boomSeconds);
+    final mono = await _prefs.getBool(_mono);
 
     Future<double> level(String key, double fallback) async {
       final v = await _prefs.getDouble(key);
@@ -201,6 +212,7 @@ class SettingsStore {
       noiseLevel: await level(_noiseLevel, d.noiseLevel),
       binauralLevel: await level(_binauralLevel, d.binauralLevel),
       boomLevel: await level(_boomLevel, d.boomLevel),
+      mono: mono ?? d.mono,
     );
   }
 
@@ -215,5 +227,6 @@ class SettingsStore {
     await _prefs.setDouble(_noiseLevel, settings.noiseLevel);
     await _prefs.setDouble(_binauralLevel, settings.binauralLevel);
     await _prefs.setDouble(_boomLevel, settings.boomLevel);
+    await _prefs.setBool(_mono, settings.mono);
   }
 }

@@ -33,7 +33,7 @@ void main() {
     expect(c.phase, SessionPhase.stopped);
     expect(audio.calls, containsAll([
       'noise true', 'color brown', 'volume 1.0', 'binaural false', 'beat 4.0', 'boom false',
-      'boom-interval 8.0', 'noise-level 1.0', 'binaural-level 1.0', 'boom-level 1.0',
+      'boom-interval 8.0', 'noise-level 1.0', 'binaural-level 1.0', 'boom-level 1.0', 'mono false',
     ]));
     expect(audio.calls.where((s) => s.startsWith('start') || s == 'open'), isEmpty,
         reason: 'never plays sound on launch');
@@ -171,6 +171,23 @@ void main() {
     expect(saved.last, SessionSettings.firstLaunch.copyWith(
         color: NoiseColor.white, binauralOn: true, beatHz: 6));
     c.dispose();
+  });
+
+  test('mono applies at once, also mid-session, and is saved; restored mono reaches the engine', () {
+    final c = make();
+    c.playOrStop();
+    audio.calls.clear();
+    c.setMono(true);
+    expect(audio.calls, ['mono true']);
+    expect(saved.last, SessionSettings.firstLaunch.copyWith(mono: true));
+    c.setMono(false);
+    expect(audio.calls.last, 'mono false');
+    expect(saved.last.mono, isFalse);
+    c.dispose();
+
+    audio = FakeAudio();
+    make(settings: SessionSettings.firstLaunch.copyWith(mono: true)).dispose();
+    expect(audio.calls, contains('mono true'));
   });
 
   test('the beat stepper sets one of 2, 4, 6, 8, 10 Hz', () {

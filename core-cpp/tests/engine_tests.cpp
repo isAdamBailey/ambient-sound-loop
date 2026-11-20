@@ -753,6 +753,115 @@ static void testNeverClips() {
         for (float s : x) peak = std::max(peak, std::fabs(s));
         CHECK(peak < 1.0f, "colour %d peak %.4f", color, peak);
     }
+
+    // Every layer at full scale, the app's shortest boom gap: mono stacks the
+    // beat's two tones and overlapping strikes in one ear, so it runs hotter.
+    // The soft clip may round a few more peaks; white and pink stay under it.
+    for (auto color : {HUMSPAN_NOISE_WHITE, HUMSPAN_NOISE_PINK, HUMSPAN_NOISE_BROWN}) {
+        double overKnee[2] = {0, 0};
+        for (int mono = 0; mono < 2; ++mono) {
+            Engine eng(kRate, 7);
+            humspan_engine_set_noise_color(eng.e, color);
+            humspan_engine_set_volume(eng.e, 1.0f);
+            humspan_engine_set_binaural(eng.e, 1);
+            humspan_engine_set_beat_frequency(eng.e, 10.0f);
+            humspan_engine_set_boom(eng.e, 1);
+            humspan_engine_set_boom_interval(eng.e, 2.0f);
+            humspan_engine_set_mono(eng.e, mono);
+            humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
+            const auto x = render(eng.e, kRate * 30);
+            size_t over = 0;
+            for (float s : x) over += std::fabs(s) > 0.8f;
+            overKnee[mono] = double(over) / double(x.size());
+        }
+        if (color != HUMSPAN_NOISE_BROWN) {
+            CHECK(overKnee[1] == 0.0, "colour %d in mono reaches the clip knee (%.4f%%)", color, 100 * overKnee[1]);
+        }
+        CHECK(overKnee[1] < 0.004, "colour %d in mono: %.3f%% of samples past the knee", color, 100 * overKnee[1]);
+        CHECK(overKnee[1] <= 4.0 * overKnee[0] + 1e-6, "colour %d: mono clips %.3f%% vs stereo %.3f%%", color,
+              100 * overKnee[1], 100 * overKnee[0]);
+    }
+}
+
+static void testMonoSendsTheSameToBothEars() {
+    std::printf("mono: both ears hear the same, each layer at its stereo loudness\n");
+    // Renders one layer alone, after the mono switch has settled.
+    auto layer = [](int which, bool mono) {
+        Engine eng(kRate, 5);
+        humspan_engine_set_volume(eng.e, 1.0f);
+        humspan_engine_set_noise(eng.e, which == 0);
+        humspan_engine_set_binaural(eng.e, which == 1);
+        humspan_engine_set_boom(eng.e, which == 2);
+        humspan_engine_set_mono(eng.e, mono ? 1 : 0);
+        humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
+        return render(eng.e, kRate * 4);
+    };
+    auto channelRms = [](const std::vector<float>& x, int ch, size_t from, size_t to) {
+        double sum = 0;
+        for (size_t i = from; i < to; ++i) sum += double(x[i * 2 + size_t(ch)]) * x[i * 2 + size_t(ch)];
+        return std::sqrt(sum / double(to - from));
+    };
+    auto maxSideDiff = [](const std::vector<float>& x, size_t from) {
+        float d = 0;
+        for (size_t i = from; i < x.size() / 2; ++i) d = std::max(d, std::fabs(x[i * 2] - x[i * 2 + 1]));
+        return d;
+    };
+    const size_t from = kRate / 2, to = 4 * kRate;
+
+    const auto stereoNoise = layer(0, false);
+    CHECK(maxSideDiff(stereoNoise, from) > 0.05f, "stereo by default: the ears differ");
+    const auto monoNoise = layer(0, true);
+    CHECK(maxSideDiff(monoNoise, 0) < 1e-4f, "mono noise is the same in both ears");
+    const double noiseDb = toDb(channelRms(monoNoise, 1, from, to) / channelRms(stereoNoise, 1, from, to));
+    CHECK(std::fabs(noiseDb) < 0.5, "mono noise is %.2f dB from stereo", noiseDb);
+
+    const auto stereoBeat = layer(1, false);
+    const auto monoBeat = layer(1, true);
+    CHECK(maxSideDiff(monoBeat, 0) < 1e-4f, "mono beat is the same in both ears");
+    CHECK(toneAmplitude(monoBeat, 0, 184, from, to) > 0.5 * toneAmplitude(stereoBeat, 1, 184, from, to),
+          "each ear hears both beat tones");
+    const double beatDb = toDb(channelRms(monoBeat, 0, from, to) / channelRms(stereoBeat, 0, from, to));
+    CHECK(std::fabs(beatDb) < 0.5, "mono beat is %.2f dB from stereo", beatDb);
+
+    // The first strike is left: in mono it lands in both ears, as loud.
+    const auto stereoBoom = layer(2, false);
+    const auto monoBoom = layer(2, true);
+    CHECK(maxSideDiff(monoBoom, 0) < 1e-4f, "mono boom is the same in both ears");
+    const size_t strike = size_t(0.5 * kRate);
+    const double boomDb = toDb(channelRms(monoBoom, 1, 0, strike) / channelRms(stereoBoom, 0, 0, strike));
+    CHECK(std::fabs(boomDb) < 0.5, "a mono strike is %.2f dB from the stereo one", boomDb);
+
+    // Switching mid-session is smoothed: no step between frames.
+    Engine eng(kRate, 5);
+    humspan_engine_set_volume(eng.e, 1.0f);
+    humspan_engine_set_binaural(eng.e, 1);
+    humspan_engine_set_boom(eng.e, 1);
+    humspan_engine_start(eng.e, 0.0, 0.0, 0.0);
+    const auto before = render(eng.e, kRate);
+    humspan_engine_set_mono(eng.e, 1);
+    const auto after = render(eng.e, kRate);
+    float jump = std::fabs(after[1] - before[before.size() - 1]);
+    CHECK(jump < 0.1f, "switching to mono jumps by %.3f", jump);
+    CHECK(maxSideDiff(after, kRate / 2) < 1e-4f, "mono settles within half a second");
+    humspan_engine_set_mono(eng.e, 0);
+    const auto back = render(eng.e, kRate);
+    CHECK(maxSideDiff(back, kRate / 2) > 0.05f, "back to stereo");
+
+    // The right ear's noise keeps its level through the switch: its own bed
+    // and the left one are independent, so it crossfades at equal power.
+    // White, so a 20 ms window is a steady measure.
+    Engine noise(kRate, 5);
+    humspan_engine_set_noise_color(noise.e, HUMSPAN_NOISE_WHITE);
+    humspan_engine_set_volume(noise.e, 1.0f);
+    humspan_engine_start(noise.e, 0.0, 0.0, 0.0);
+    const auto settled = render(noise.e, kRate);
+    humspan_engine_set_mono(noise.e, 1);
+    const auto during = render(noise.e, kRate / 4); // ~8 smoothing time constants
+    const double stereoRms = channelRms(settled, 1, kRate / 2, kRate);
+    for (size_t start = 0; start + kRate / 50 <= size_t(kRate / 4); start += kRate / 50) {
+        const double db = toDb(channelRms(during, 1, start, start + kRate / 50) / stereoRms);
+        CHECK(std::fabs(db) < 1.0, "right ear %.2f dB at %zu ms into the switch", db, start * 1000 / kRate);
+    }
 }
 
 static void testRenderDoesNotAllocate() {
@@ -769,6 +878,7 @@ static void testRenderDoesNotAllocate() {
         if (i == 150) humspan_engine_set_boom(eng.e, 1);
         if (i % 280 == 0) humspan_engine_set_boom_interval(eng.e, float(2 + (i / 280) % 3 * 2));
         if (i % 320 == 0) humspan_engine_set_speaker_output(eng.e, i / 320 % 2);
+        if (i % 340 == 0) humspan_engine_set_mono(eng.e, i / 340 % 2);
         if (i == 1300) humspan_engine_set_boom(eng.e, 0);
         if (i % 250 == 0) humspan_engine_set_beat_frequency(eng.e, float(2 + i / 250 % 5 * 2));
         if (i == 400) humspan_engine_set_duck_gain(eng.e, 0.3f);
@@ -819,6 +929,7 @@ int main() {
     testShortSessionShrinksBothFades();
     testStopFadesAndFinishes();
     testNeverClips();
+    testMonoSendsTheSameToBothEars();
     testRenderDoesNotAllocate();
     if (g_failures) {
         std::printf("%d check(s) failed\n", g_failures);

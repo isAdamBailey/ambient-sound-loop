@@ -184,6 +184,29 @@ void main() {
     });
   });
 
+  group('mono', () {
+    testWidgets('a Mono switch under the layers, stereo by default, saved when switched', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpScreen(tester, const Size(390, 844));
+      final mono = find.bySemanticsLabel('Mono, same sound in both ears');
+      expect(tester.getSemantics(mono), isSemantics(isButton: true, isToggled: false));
+      expect(find.bySemanticsLabel('Mono'), findsNothing, reason: 'announced once, by the switch');
+      expect(find.bySemanticsLabel('Same sound in both ears'), findsNothing);
+      expect(centerOf(tester, 'Mono').dy, greaterThan(centerOf(tester, 'BOOM').dy));
+      expect(centerOf(tester, 'Mono').dy, lessThan(tester.getCenter(playButtonFinder()).dy));
+      await tester.tap(mono);
+      await tester.pump();
+      expect(controller.settings.mono, isTrue);
+      expect(audio.calls.last, 'mono true');
+      expect(saved.last.mono, isTrue);
+      expect(tester.getSemantics(mono), isSemantics(isButton: true, isToggled: true));
+      // Every strike reaches both ears, so the boom no longer claims left and right.
+      expect(find.bySemanticsLabel('Boom, alternates left and right'), findsNothing);
+      expect(find.text('left'), findsNothing);
+      semantics.dispose();
+    });
+  });
+
   group('play', () {
     testWidgets('with every layer off Play is disabled, with a note', (tester) async {
       await pumpScreen(tester, const Size(390, 844));

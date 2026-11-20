@@ -1,7 +1,7 @@
 /// The session screen: the whole app. Spec #9 §2, §3 and §8.
 ///
 /// The dial carries the clock and the length; under it the preset stops,
-/// then one ruled row per layer, then Play. Narrow screens stack them; at
+/// then one ruled row per layer and the Mono row, then Play. Narrow screens stack them; at
 /// 900 px and up the dial sits left of the layers.
 library;
 
@@ -58,7 +58,7 @@ class _NarrowLayout extends StatelessWidget {
         // The dial takes what the rows leave, so a phone fits without scrolling.
         final dial = math.max(
           0.0,
-          math.min((constraints.maxHeight - 590).clamp(176.0, 260.0), constraints.maxWidth - pad.horizontal),
+          math.min((constraints.maxHeight - 636).clamp(176.0, 260.0), constraints.maxWidth - pad.horizontal),
         );
         return SingleChildScrollView(
           padding: pad,
@@ -75,6 +75,7 @@ class _NarrowLayout extends StatelessWidget {
                   _StopsOrStatus(c),
                   const SizedBox(height: 10),
                   ..._layers(c),
+                  _MonoRow(c),
                   const Expanded(child: SizedBox(height: 16)),
                   _PlayRow(c),
                 ],
@@ -119,7 +120,7 @@ class _WideLayout extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [..._layers(c), const SizedBox(height: 28), _PlayRow(c)],
+                children: [..._layers(c), _MonoRow(c), const SizedBox(height: 28), _PlayRow(c)],
               ),
             ),
           ],
@@ -166,11 +167,17 @@ List<Widget> _layers(SessionController c) {
       c: c,
     ),
     _LayerRow(
-      heading: Semantics(
-        label: 'Boom, alternates left and right',
-        excludeSemantics: true,
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [Text('BOOM'), SizedBox(width: 10), _LeftRight()]),
-      ),
+      // In mono both ears hear every strike, so there is no left or right.
+      heading: s.mono
+          ? const Text('BOOM')
+          : Semantics(
+              label: 'Boom, alternates left and right',
+              excludeSemantics: true,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [Text('BOOM'), SizedBox(width: 10), _LeftRight()],
+              ),
+            ),
       switchLabel: 'Boom',
       onToggle: c.setBoom,
       controlName: 'Every',
@@ -285,6 +292,47 @@ class _LayerRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Mono under the layers: a listening option, not a layer, so its name is
+/// plain words rather than an uppercase heading.
+class _MonoRow extends StatelessWidget {
+  const _MonoRow(this.c);
+  final SessionController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = c.settings.mono;
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: SessionColors.rule)),
+      ),
+      child: Row(
+        children: [
+          // The switch's label says all of this, so it is announced once.
+          Expanded(
+            child: ExcludeSemantics(
+              child: Row(
+                children: [
+                  Text('Mono', style: SessionText.weight(16, 500, color: on ? SessionColors.ink : SessionColors.dim)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Same sound in both ears',
+                      style: SessionText.weight(14, 400, color: SessionColors.dim),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          LayerSwitch(label: 'Mono, same sound in both ears', on: on, onChanged: c.setMono),
+        ],
       ),
     );
   }

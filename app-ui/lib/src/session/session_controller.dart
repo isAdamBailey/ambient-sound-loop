@@ -64,7 +64,8 @@ class SessionController extends ChangeNotifier {
       ..setBinaural(settings.binauralOn)
       ..setBeatFrequency(settings.beatHz.toDouble())
       ..setBoom(settings.boomOn)
-      ..setBoomInterval(settings.boomSeconds.toDouble());
+      ..setBoomInterval(settings.boomSeconds.toDouble())
+      ..setMono(settings.mono);
     for (final layer in SoundLayer.values) {
       _sendLevel(layer, settings.level(layer));
     }
@@ -305,6 +306,12 @@ class SessionController extends ChangeNotifier {
   /// The platform reports whether sound goes to the device's own speaker.
   /// Not a setting: it follows the route, whatever the session is doing.
   void outputRouteChanged({required bool speaker}) => _audio.setSpeakerOutput(speaker);
+
+  /// Mono: the same sound in both ears, for listening with one ear.
+  void setMono(bool mono) {
+    _audio.setMono(mono);
+    _update(_settings.copyWith(mono: mono));
+  }
 
   /// The boom gap: one of [boomIntervals].
   void setBoomSeconds(int seconds) {
