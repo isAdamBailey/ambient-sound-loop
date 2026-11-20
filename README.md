@@ -87,14 +87,15 @@ keyPassword=…
 
 `cd app-ui && flutter build appbundle --release` writes `build/app/outputs/bundle/release/app-release.aab`. The version is the `version:` line in `pubspec.yaml` (`name+code`); raise the number after `+` for every upload. Store listing text and assets are in `docs/store/`.
 
-**16 KB pages:** Play requires every native library to load on 16 KB page devices, so each ELF `LOAD` segment must be aligned to at least `0x4000`. NDK r28 and later link that way by default, and Flutter's `ndkVersion` (28.2.13676358) builds `libhumspan_native.so`, so the hook passes no `-z max-page-size` flag. To check a bundle:
+**16 KB pages:** Play requires every 64-bit native library to load on 16 KB page devices, so each ELF `LOAD` segment must be aligned to at least `0x4000` (`0x10000` also works). NDK r28 and later link that way by default, and Flutter's `ndkVersion` (28.2.13676358) builds `libhumspan_native.so`, so the hook passes no `-z max-page-size` flag. The bundle check below enforces it.
+
+**Before every upload,** run the bundle check on the signed release bundle. `N` is the versionCode of the last uploaded bundle (Play Console → App bundle explorer):
 
 ```bash
-unzip -o -q build/app/outputs/bundle/release/app-release.aab 'base/lib/*' -d /tmp/aab
-for f in /tmp/aab/base/lib/*/*.so; do echo "$f $(llvm-readelf -lW "$f" | awk '/LOAD/{print $NF}' | sort -u | xargs)"; done
+python3 app-ui/tool/check_release_bundle.py --last-version-code N app-ui/build/app/outputs/bundle/release/app-release.aab
 ```
 
-Every line should end in `0x4000` or `0x10000` (64 KB also works on 16 KB devices). `llvm-readelf` is in the NDK under `toolchains/llvm/prebuilt/*/bin/`.
+It prints versionName, versionCode, targetSdk, signer, permissions and each native library's `LOAD` alignment, then fails (exit 1) on a package other than `io.adambailey.humspan`, the debug key, a key that expires before 2033-10-22, a versionCode not above the last upload, a targetSdk below Play's minimum, a permission (in any module's manifest) outside the allowlist or `INTERNET`, or a 64-bit library aligned below 16 KB. Exit 2 means it could not run. It needs a JDK and the SDK build tools (`aapt2`). Strict is the default. `--non-strict` accepts any verified non-debug key, such as CI's short-lived throwaway key. After changing it, run `python3 app-ui/tool/test_check_release_bundle.py`.
 
 ## Listen
 
