@@ -24,8 +24,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CHECK = os.path.join(HERE, "check_release_bundle.py")
 sys.dont_write_bytecode = True
 sys.path.insert(0, HERE)
-import check_release_bundle as crb  # noqa: E402  (tool discovery only)
+import check_release_bundle as crb  # noqa: E402  (finds the SDK, JDK and aapt2; MIN_TARGET_SDK)
 
+# Written out, not crb.ALLOWED_PERMISSIONS: the test is a second source of truth.
 GOOD_PERMISSIONS = [
     "android.permission.FOREGROUND_SERVICE",
     "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
@@ -100,8 +101,11 @@ class Fixtures:
 
     def bundle(self, version_code=2, version_name="1.0.0", target_sdk=crb.MIN_TARGET_SDK,
                permissions=GOOD_PERMISSIONS, sdk23_permissions=(), libs=None,
-               signer="CN=Humspan Upload", validity_days=10000, signed=True):
-        """Writes a fixture .aab and returns its path."""
+               signer="CN=Humspan Upload", validity_days=10000, signed=True,
+               modules=None, corrupt_libs=False):
+        """Writes a fixture .aab and returns its path. modules maps a feature
+        module's name to the permissions its manifest declares. corrupt_libs
+        damages the native libraries' bytes after signing."""
         if libs is None:
             libs = {"arm64-v8a/libhumspan.so": elf64(0x4000),
                     "x86_64/libhumspan.so": elf64(0x4000)}
@@ -111,24 +115,11 @@ class Fixtures:
         uses = "".join('<uses-permission android:name="%s"/>' % p for p in permissions)
         uses += "".join('<uses-permission-sdk-23 android:name="%s"/>' % p
                         for p in sdk23_permissions)
-        manifest = os.path.join(work, "AndroidManifest.xml")
-        with open(manifest, "w") as f:
-            f.write(
-                '<manifest xmlns:android="http://schemas.android.com/apk/res/android"'
-                ' package="dev.humspan.app" android:versionCode="%d"'
-                ' android:versionName="%s">'
-                '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="%d"/>'
-                '<permission android:name="dev.humspan.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"'
-                ' android:protectionLevel="signature"/>'
-                '%s<application/></manifest>'
-                % (version_code, version_name, target_sdk, uses)
-            )
-        proto = os.path.join(work, "proto.zip")
-        subprocess.run(
-            [self.aapt2, "link", "--proto-format", "-o", proto, "--manifest", manifest,
-             "-I", self.android_jar],
-            check=True,
-        )
+        proto = self.proto_manifest(work, "base",
+            '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="%d"/>'
+            '<permission android:name="dev.humspan.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"'
+            ' android:protectionLevel="signature"/>%s' % (target_sdk, uses),
+            ' android:versionCode="%d" android:versionName="%s"' % (version_code, version_name))
         aab = os.path.join(self.dir, "fixture%d.aab" % self.count)
         with zipfile.ZipFile(proto) as src, zipfile.ZipFile(aab, "w") as out:
             out.writestr("BundleConfig.pb", b"")
@@ -136,6 +127,16 @@ class Fixtures:
             out.writestr("base/resources.pb", src.read("resources.pb"))
             for name, data in libs.items():
                 out.writestr("base/lib/" + name, data)
+            for module, module_permissions in (modules or {}).items():
+                uses = "".join('<uses-permission android:name="%s"/>' % p
+                               for p in module_permissions)
+                # With no uses-sdk, aapt2 would report pre-API-4 implied permissions.
+                feature = self.proto_manifest(
+                    work, module, '<uses-sdk android:minSdkVersion="24"/>' + uses,
+                    ' split="%s"' % module)
+                with zipfile.ZipFile(feature) as fsrc:
+                    out.writestr(module + "/manifest/AndroidManifest.xml",
+                                 fsrc.read("AndroidManifest.xml"))
         if signed:
             keystore = self.keystore(signer, validity_days)
             subprocess.run(
@@ -143,19 +144,58 @@ class Fixtures:
                  "-keypass", "fixture", aab, "k"],
                 check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
+        if corrupt_libs:
+            with open(aab, "rb") as f:
+                raw = f.read()
+            for data in libs.values():
+                raw = raw.replace(data, data[:-1] + bytes([data[-1] ^ 0xFF]), 1)
+            with open(aab, "wb") as f:
+                f.write(raw)
         return aab
 
+    def proto_manifest(self, work, module, body, attrs=""):
+        """Links a manifest to protobuf format; returns the proto zip's path."""
+        manifest = os.path.join(work, module + "-AndroidManifest.xml")
+        with open(manifest, "w") as f:
+            f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android"'
+                    ' package="dev.humspan.app"%s>%s<application/></manifest>' % (attrs, body))
+        proto = os.path.join(work, module + "-proto.zip")
+        subprocess.run(
+            [self.aapt2, "link", "--proto-format", "-o", proto, "--manifest", manifest,
+             "-I", self.android_jar],
+            check=True,
+        )
+        return proto
 
-def run_check(aab, *args):
+    def script(self, name, body, executable=True):
+        """Writes a stand-in for a tool; returns its path."""
+        path = os.path.join(self.dir, name)
+        with open(path, "w") as f:
+            f.write("#!/bin/sh\n" + body + "\n")
+        os.chmod(path, 0o755 if executable else 0o644)
+        return path
+
+    def java_home_with_failing_keytool(self):
+        """A JAVA_HOME whose keytool always fails and whose jarsigner is the real one."""
+        home = os.path.join(self.dir, "broken-jdk")
+        os.makedirs(os.path.join(home, "bin"))
+        os.symlink(self.script("keytool", "echo 'keytool error: boom' >&2; exit 1"),
+                   os.path.join(home, "bin", "keytool"))
+        os.symlink(crb.java_tool("jarsigner"), os.path.join(home, "bin", "jarsigner"))
+        return home
+
+
+def run_check(aab, *args, env=None):
     proc = subprocess.run(
         [sys.executable, CHECK, *args, aab],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True,
+        env=dict(os.environ, **(env or {})),
     )
     return proc.returncode, proc.stdout
 
 
-def expect(name, aab, code, *args, contains=()):
-    got, out = run_check(aab, *args)
+def expect(name, aab, code, *args, contains=(), env=None):
+    got, out = run_check(aab, *args, env=env)
     missing = [c for c in contains if c not in out]
     if got != code or missing:
         failures.append(name)
@@ -226,13 +266,33 @@ def main():
         legacy32 = fx.bundle(libs={"arm64-v8a/libhumspan.so": elf64(0x4000),
                                    "armeabi-v7a/libhumspan.so": elf32(0x1000)})
         expect("32-bit library aligned to 4 KB is reported, not failed", legacy32, 0,
-               "--non-strict", contains=["armeabi-v7a/libhumspan.so 0x1000"])
+               "--non-strict", contains=["armeabi-v7a/libhumspan.so 0x1000  (not checked)"])
         not_elf = fx.bundle(libs={"arm64-v8a/libhumspan.so": b"not an ELF file"})
         expect("unreadable 64-bit library fails", not_elf, 1, "--non-strict",
                contains=["not an ELF"])
 
         unsigned = fx.bundle(signed=False)
         expect("unsigned bundle fails", unsigned, 1, "--non-strict", contains=["unsigned"])
+
+        feature = fx.bundle(modules={"extras": ["android.permission.INTERNET"]})
+        expect("INTERNET in a feature module's manifest fails", feature, 1, "--non-strict",
+               contains=["android.permission.INTERNET"])
+        feature_ok = fx.bundle(modules={"extras": GOOD_PERMISSIONS[:1]})
+        expect("allowed permission in a feature module passes", feature_ok, 0, "--non-strict")
+
+        # The check could not run: exit 2, never 1 (which would read as a rule failing).
+        expect("failing keytool cannot run", good, 2, "--non-strict",
+               env={"JAVA_HOME": fx.java_home_with_failing_keytool()},
+               contains=["error:", "keytool"])
+        unquoted = fx.script("aapt2-unquoted", "echo \"package: name='dev.humspan.app\"")
+        expect("unterminated quote in aapt2 output cannot run", good, 2, "--non-strict",
+               "--aapt2", unquoted, contains=["error:"])
+        not_executable = fx.script("aapt2-not-executable", "exit 0", executable=False)
+        expect("aapt2 that cannot be executed cannot run", good, 2, "--non-strict",
+               "--aapt2", not_executable, contains=["error:"])
+        corrupt = fx.bundle(corrupt_libs=True)
+        expect("corrupt native library cannot run", corrupt, 2, "--non-strict",
+               contains=["error:"])
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 

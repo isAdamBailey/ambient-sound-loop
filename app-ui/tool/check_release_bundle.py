@@ -54,7 +54,8 @@ SIGNER_VALID_AFTER = (2033, 10, 22)
 MIN_LOAD_ALIGN = 0x4000
 ALIGN_ENFORCED_ABIS = frozenset(["arm64-v8a", "x86_64"])
 
-USAGE_ERROR = 2
+RULE_FAILED = 1
+CANNOT_RUN = 2
 
 
 class CheckError(Exception):
@@ -117,33 +118,52 @@ def run(cmd):
 # --- reading the bundle --------------------------------------------------------
 
 def read_manifest(aab, aapt2):
-    """Returns (facts, permissions) from the base module's manifest."""
-    with tempfile.TemporaryDirectory(prefix="humspan-aab-") as tmp:
-        # aapt2 reads a proto-format "APK": manifest and resources.pb at the root.
-        proto = os.path.join(tmp, "base.zip")
-        try:
-            with zipfile.ZipFile(aab) as src, zipfile.ZipFile(proto, "w") as out:
-                out.writestr("AndroidManifest.xml", src.read("base/manifest/AndroidManifest.xml"))
-                out.writestr("resources.pb", src.read("base/resources.pb"))
-        except (zipfile.BadZipFile, KeyError) as e:
-            raise CheckError("%s is not an Android App Bundle with a base module (%s)" % (aab, e))
-        code, out = run([aapt2, "dump", "badging", proto])
-    if code != 0:
-        raise CheckError("aapt2 could not read the manifest:\n" + out)
+    """Returns (facts, permissions): facts from the base module's manifest, and
+    the permissions every module's manifest declares."""
+    try:
+        with zipfile.ZipFile(aab) as src:
+            names = src.namelist()
+            if "base/manifest/AndroidManifest.xml" not in names:
+                raise CheckError("%s is not an Android App Bundle with a base module" % aab)
+            # <module>/manifest/AndroidManifest.xml, base first.
+            modules = ["base"] + sorted(
+                n.split("/")[0] for n in names
+                if n.endswith("/manifest/AndroidManifest.xml") and n.count("/") == 2
+                and not n.startswith("base/"))
+            dumps = [_dump_badging(src, module, aapt2) for module in modules]
+    except zipfile.BadZipFile as e:
+        raise CheckError("%s is not an Android App Bundle (%s)" % (aab, e))
 
     facts = {}
     permissions = []
-    for line in out.splitlines():
-        if line.startswith("package:"):
-            for field in ("name", "versionCode", "versionName"):
-                facts[field] = _quoted(line, field)
-        elif line.startswith("targetSdkVersion:"):
-            facts["targetSdk"] = line.split(":", 1)[1].strip().strip("'")
-        elif line.startswith(("uses-permission:", "uses-permission-sdk-23:")):
-            name = _quoted(line, "name")
-            if name and name not in permissions:
-                permissions.append(name)
+    for module, out in zip(modules, dumps):
+        for line in out.splitlines():
+            if line.startswith("package:") and module == "base":
+                for field in ("name", "versionCode", "versionName"):
+                    facts[field] = _quoted(line, field)
+            elif line.startswith("targetSdkVersion:") and module == "base":
+                facts["targetSdk"] = line.split(":", 1)[1].strip().strip("'")
+            elif line.startswith(("uses-permission:", "uses-permission-sdk-23:")):
+                name = _quoted(line, "name")
+                if name and name not in permissions:
+                    permissions.append(name)
     return facts, permissions
+
+
+def _dump_badging(src, module, aapt2):
+    """aapt2's badging dump of one module's manifest."""
+    with tempfile.TemporaryDirectory(prefix="humspan-aab-") as tmp:
+        # aapt2 reads a proto-format "APK": manifest (and resources.pb) at the root.
+        proto = os.path.join(tmp, module + ".zip")
+        with zipfile.ZipFile(proto, "w") as out:
+            out.writestr("AndroidManifest.xml",
+                         src.read(module + "/manifest/AndroidManifest.xml"))
+            if module + "/resources.pb" in src.namelist():
+                out.writestr("resources.pb", src.read(module + "/resources.pb"))
+        code, out = run([aapt2, "dump", "badging", proto])
+    if code != 0:
+        raise CheckError("aapt2 could not read the %s module's manifest:\n%s" % (module, out))
+    return out
 
 
 def _quoted(line, field):
@@ -205,9 +225,10 @@ def read_signer(aab):
     """Returns the first signer's certificate owner, SHA-256 and 'until' date."""
     code, out = run([java_tool("keytool"), "-J-Duser.language=en", "-J-Duser.country=US",
                      "-printcert", "-jarfile", aab])
-    signer = {"owner": None, "sha256": None, "until": None}
     if code != 0:
-        return signer
+        # An unsigned bundle exits 0 ("Not a signed jar file"); this is keytool failing.
+        raise CheckError("keytool could not read the bundle's signer:\n" + out)
+    signer = {"owner": None, "sha256": None, "until": None}
     for raw in out.splitlines():
         line = raw.strip()
         if line.startswith("Owner:") and signer["owner"] is None:
@@ -274,10 +295,15 @@ def check_target_sdk(target_sdk):
     return []
 
 
+def alignment_enforced(abi):
+    """Whether Play's 16 KB page rule applies to this ABI's libraries."""
+    return abi in ALIGN_ENFORCED_ABIS
+
+
 def check_native_libs(libs):
     problems = []
     for name, abi, aligns in libs:
-        if abi not in ALIGN_ENFORCED_ABIS:
+        if not alignment_enforced(abi):
             continue
         if not aligns:
             problems.append("%s is not an ELF file with LOAD segments" % name)
@@ -312,7 +338,7 @@ def parse_args(argv):
     mode.add_argument("--strict", dest="strict", action="store_true", default=True,
                       help="the owner's pre-upload check (default)")
     mode.add_argument("--non-strict", dest="strict", action="store_false",
-                      help="for CI builds signed with a throwaway key")
+                      help="accept any verified non-debug key (CI's throwaway key)")
     parser.add_argument("--last-version-code", metavar="N", type=int,
                         help="versionCode of the last upload to Play; the bundle's must be greater")
     parser.add_argument("--aapt2", metavar="PATH",
@@ -323,16 +349,22 @@ def parse_args(argv):
 def main(argv=None):
     args = parse_args(argv)
     try:
-        if not os.path.isfile(args.bundle):
-            raise CheckError("%s: no such file" % args.bundle)
-        aapt2 = find_aapt2(args.aapt2)
-        facts, permissions = read_manifest(args.bundle, aapt2)
-        signer = read_signer(args.bundle)
-        verified = signature_verifies(args.bundle)
-        libs = read_native_libs(args.bundle)
+        return _check(args)
     except CheckError as e:
         print("error: %s" % e, file=sys.stderr)
-        return USAGE_ERROR
+    except Exception as e:  # a crash is "could not run", never "a rule failed"
+        print("error: the check crashed: %s: %s" % (type(e).__name__, e), file=sys.stderr)
+    return CANNOT_RUN
+
+
+def _check(args):
+    if not os.path.isfile(args.bundle):
+        raise CheckError("%s: no such file" % args.bundle)
+    aapt2 = find_aapt2(args.aapt2)
+    facts, permissions = read_manifest(args.bundle, aapt2)
+    signer = read_signer(args.bundle)
+    verified = signature_verifies(args.bundle)
+    libs = read_native_libs(args.bundle)
 
     problems = []
     problems += check_signer(signer, verified, args.strict)
@@ -357,7 +389,7 @@ def main(argv=None):
     print("native libraries (LOAD alignment):")
     for name, abi, aligns in libs:
         shown = " ".join("%#x" % a for a in sorted(set(aligns))) if aligns else "(not ELF)"
-        note = "" if abi in ALIGN_ENFORCED_ABIS else "  (32-bit, not checked)"
+        note = "" if alignment_enforced(abi) else "  (not checked)"
         print("  %s %s%s" % (name, shown, note))
     if not libs:
         print("  (none)")
@@ -367,7 +399,7 @@ def main(argv=None):
         print("\nFAILED: %d rule(s)" % len(problems))
         for p in problems:
             print("  - %s" % p)
-        return 1
+        return RULE_FAILED
     print("\nOK: the bundle passes every release rule")
     return 0
 
