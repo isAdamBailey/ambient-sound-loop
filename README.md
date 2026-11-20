@@ -89,13 +89,13 @@ keyPassword=…
 
 **16 KB pages:** Play requires every 64-bit native library to load on 16 KB page devices, so each ELF `LOAD` segment must be aligned to at least `0x4000` (`0x10000` also works). NDK r28 and later link that way by default, and Flutter's `ndkVersion` (28.2.13676358) builds `libhumspan_native.so`, so the hook passes no `-z max-page-size` flag. The bundle check below enforces it.
 
-**Before every upload,** run the bundle check on the signed release bundle, with the versionCode of the last bundle uploaded to Play (Play Console → App bundle explorer):
+**Before every upload,** run the bundle check on the signed release bundle. `N` is the versionCode of the last uploaded bundle (Play Console → App bundle explorer):
 
 ```bash
-python3 app-ui/tool/check_release_bundle.py --last-version-code 1 app-ui/build/app/outputs/bundle/release/app-release.aab
+python3 app-ui/tool/check_release_bundle.py --last-version-code N app-ui/build/app/outputs/bundle/release/app-release.aab
 ```
 
-It prints versionName, versionCode, targetSdk, signer, permissions and each native library's `LOAD` alignment, then fails (exit 1) on the debug key, a key that expires before 2033-10-22, a versionCode not above the last upload, a targetSdk below Play's minimum, a permission outside the allowlist or `INTERNET`, or a 64-bit library aligned below 16 KB. Exit 2 means it could not run. It needs a JDK and the SDK build tools (`aapt2`). Strict is the default. `--non-strict` accepts a short-lived throwaway key, for CI. After changing it, run `python3 app-ui/tool/test_check_release_bundle.py`.
+It prints versionName, versionCode, targetSdk, signer, permissions and each native library's `LOAD` alignment, then fails (exit 1) on a package other than `io.adambailey.humspan`, the debug key, a key that expires before 2033-10-22, a versionCode not above the last upload, a targetSdk below Play's minimum, a permission (in any module's manifest) outside the allowlist or `INTERNET`, or a 64-bit library aligned below 16 KB. Exit 2 means it could not run. It needs a JDK and the SDK build tools (`aapt2`). Strict is the default. `--non-strict` accepts any verified non-debug key, such as CI's short-lived throwaway key. After changing it, run `python3 app-ui/tool/test_check_release_bundle.py`.
 
 ## Listen
 
