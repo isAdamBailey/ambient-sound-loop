@@ -88,6 +88,14 @@ void humspan_engine_set_boom_interval(humspan_engine* engine, float seconds);
  * change never clicks. Off (deep) by default. Control thread (atomic). */
 void humspan_engine_set_speaker_output(humspan_engine* engine, int speaker);
 
+/* Mono output, for listeners who hear with one ear: both channels carry the
+ * same signal, so nothing is lost to either side. Each layer keeps its stereo
+ * loudness. The binaural beat's two tones then mix in each ear and the beat
+ * is heard as a pulse in the sound itself (a monaural beat); the boom strikes
+ * both ears at once. Smoothed, so switching never clicks. Off (stereo) by
+ * default. Control thread (atomic). */
+void humspan_engine_set_mono(humspan_engine* engine, int mono);
+
 /* Start a session. duration_seconds <= 0 plays until stopped. The fade-in is
  * a raised-cosine S-curve; the fade-out occupies the final fade_out_seconds of
  * the duration and ends in true silence. Restarting while playing begins a new

@@ -56,6 +56,9 @@ final class NativeEngine {
   void setSpeakerOutput(bool speaker) =>
       c.humspan_engine_set_speaker_output(_ptr, speaker ? 1 : 0);
 
+  /// True sends the same sound to both ears, for listening with one ear.
+  void setMono(bool mono) => c.humspan_engine_set_mono(_ptr, mono ? 1 : 0);
+
   /// [duration] <= 0 plays until stopped. False if the command queue is full.
   bool start({
     required double duration,

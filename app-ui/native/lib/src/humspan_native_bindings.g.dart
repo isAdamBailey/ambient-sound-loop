@@ -138,6 +138,18 @@ external void humspan_engine_set_duck_gain(
   double gain,
 );
 
+/// Mono output, for listeners who hear with one ear: both channels carry the
+/// same signal, so nothing is lost to either side. Each layer keeps its stereo
+/// loudness. The binaural beat's two tones then mix in each ear and the beat
+/// is heard as a pulse in the sound itself (a monaural beat); the boom strikes
+/// both ears at once. Smoothed, so switching never clicks. Off (stereo) by
+/// default. Control thread (atomic).
+@ffi.Native<ffi.Void Function(ffi.Pointer<humspan_engine>, ffi.Int)>()
+external void humspan_engine_set_mono(
+  ffi.Pointer<humspan_engine> engine,
+  int mono,
+);
+
 /// Noise on/off, independent of the color: a color set while noise is off is
 /// kept for when it comes back on. Smoothed, so it never clicks, and it leaves
 /// the binaural and boom levels as they are. With every layer off a session

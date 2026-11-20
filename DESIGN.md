@@ -187,11 +187,11 @@ A night palette: two warm inks on a cold near-black, with two accents that each 
 
 ## Layout
 
-A single column on phones: dial, preset stops, three ruled layer rows, then Play pinned to the bottom. The side gutter is 20 px (12 px top, 20 px bottom). The dial takes what the rows leave (screen height minus 590 px, clamped to 176–260 px), so a phone fits the whole screen without scrolling; a scroll view catches anything shorter. A flexible gap pushes the Play row down.
+A single column on phones: dial, preset stops, three ruled layer rows, the Mono row, then Play pinned to the bottom. The side gutter is 20 px (12 px top, 20 px bottom). The dial takes what the rows leave (screen height minus 636 px, clamped to 176–260 px), so a phone fits the whole screen without scrolling; a scroll view catches anything shorter. A flexible gap pushes the Play row down.
 
 At 900 px and wider the screen becomes two columns inside a 940 px maximum width with a 32 px margin: a 340 px column holding a 300 px dial and the stops, a 64 px gap, then the layers and Play (28 px above Play).
 
-Each layer row is a hairline rule on top, then three lines each 44 px tall: heading with its switch, the control name with its control right-aligned, and the level slider with its percentage in a 48 px column. Preset stops share the width equally so all six fit at any phone size.
+Each layer row is a hairline rule on top, then three lines each 44 px tall: heading with its switch, the control name with its control right-aligned, and the level slider with its percentage in a 48 px column. The Mono row under them is one 44 px line under a hairline: "Mono" (500, 16 px, parchment when on), "Same sound in both ears" in Faded Ink, and a layer switch. It is a listening option, not a layer, so it has no uppercase heading. In mono the Boom heading drops its "left ⇄ right". Preset stops share the width equally so all six fit at any phone size.
 
 **The Forty-Four Rule.** Every touch target is at least 44 × 44 px, including words and stops; their visible mark may be smaller.
 
