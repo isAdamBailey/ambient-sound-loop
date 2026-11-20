@@ -211,6 +211,11 @@ def main():
         expect("targetSdk below the minimum fails", old_target, 1, "--non-strict",
                contains=["targetSdk"])
 
+        page4k = fx.bundle(libs={"arm64-v8a/libhumspan.so": elf64(0x1000),
+                                 "x86_64/libhumspan.so": elf64(0x4000)})
+        expect("64-bit library aligned to 4 KB fails", page4k, 1, "--non-strict",
+               contains=["arm64-v8a/libhumspan.so", "0x1000"])
+
         unsigned = fx.bundle(signed=False)
         expect("unsigned bundle fails", unsigned, 1, "--non-strict", contains=["unsigned"])
     finally:

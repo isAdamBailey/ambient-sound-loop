@@ -20,6 +20,7 @@ import argparse
 import glob
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -46,6 +47,12 @@ FORBIDDEN_PERMISSIONS = frozenset(["android.permission.INTERNET"])
 
 # Play wants signing certificates valid until after this date (strict mode).
 SIGNER_VALID_AFTER = (2033, 10, 22)
+
+# Play requires every 64-bit native library to load on 16 KB page devices: each
+# ELF LOAD segment aligned to at least 16 KB (64 KB also works). 32-bit ABIs run
+# only on 4 KB page devices, so their alignment is reported but not enforced.
+MIN_LOAD_ALIGN = 0x4000
+ALIGN_ENFORCED_ABIS = frozenset(["arm64-v8a", "x86_64"])
 
 USAGE_ERROR = 2
 
@@ -151,6 +158,49 @@ def _quoted(line, field):
     return line[start:line.index("'", start)]
 
 
+def load_alignments(elf):
+    """The p_align of each PT_LOAD segment in an ELF image, or None if the bytes
+    are not a readable ELF file."""
+    if len(elf) < 52 or elf[:4] != b"\x7fELF" or elf[4] not in (1, 2) or elf[5] not in (1, 2):
+        return None
+    is64 = elf[4] == 2
+    end = "<" if elf[5] == 1 else ">"
+    try:
+        if is64:
+            phoff, = struct.unpack_from(end + "Q", elf, 32)
+            phentsize, phnum = struct.unpack_from(end + "HH", elf, 54)
+        else:
+            phoff, = struct.unpack_from(end + "I", elf, 28)
+            phentsize, phnum = struct.unpack_from(end + "HH", elf, 42)
+        aligns = []
+        for i in range(phnum):
+            at = phoff + i * phentsize
+            p_type, = struct.unpack_from(end + "I", elf, at)
+            if p_type != 1:  # PT_LOAD
+                continue
+            if is64:
+                p_align, = struct.unpack_from(end + "Q", elf, at + 48)
+            else:
+                p_align, = struct.unpack_from(end + "I", elf, at + 28)
+            aligns.append(p_align)
+        return aligns
+    except struct.error:
+        return None
+
+
+def read_native_libs(aab):
+    """[(path inside the bundle, ABI, LOAD alignments or None)] for every .so in
+    every module."""
+    libs = []
+    with zipfile.ZipFile(aab) as z:
+        for name in sorted(z.namelist()):
+            parts = name.split("/")
+            # <module>/lib/<abi>/<name>.so
+            if len(parts) == 4 and parts[1] == "lib" and parts[3].endswith(".so"):
+                libs.append((name, parts[2], load_alignments(z.read(name))))
+    return libs
+
+
 def read_signer(aab):
     """Returns the first signer's certificate owner, SHA-256 and 'until' date."""
     code, out = run([java_tool("keytool"), "-J-Duser.language=en", "-J-Duser.country=US",
@@ -224,6 +274,22 @@ def check_target_sdk(target_sdk):
     return []
 
 
+def check_native_libs(libs):
+    problems = []
+    for name, abi, aligns in libs:
+        if abi not in ALIGN_ENFORCED_ABIS:
+            continue
+        if not aligns:
+            problems.append("%s is not an ELF file with LOAD segments" % name)
+            continue
+        low = min(aligns)
+        if low < MIN_LOAD_ALIGN:
+            problems.append("%s has a LOAD segment aligned to %#x; 16 KB pages need %#x"
+                            " (link with NDK r28+ or -Wl,-z,max-page-size=16384)"
+                            % (name, low, MIN_LOAD_ALIGN))
+    return problems
+
+
 def check_permissions(permissions):
     problems = []
     for p in permissions:
@@ -263,6 +329,7 @@ def main(argv=None):
         facts, permissions = read_manifest(args.bundle, aapt2)
         signer = read_signer(args.bundle)
         verified = signature_verifies(args.bundle)
+        libs = read_native_libs(args.bundle)
     except CheckError as e:
         print("error: %s" % e, file=sys.stderr)
         return USAGE_ERROR
@@ -272,6 +339,7 @@ def main(argv=None):
     problems += check_version_code(facts.get("versionCode"), args.last_version_code)
     problems += check_target_sdk(facts.get("targetSdk"))
     problems += check_permissions(permissions)
+    problems += check_native_libs(libs)
 
     print("bundle: %s" % args.bundle)
     print("package: %s" % facts.get("name"))
@@ -285,6 +353,14 @@ def main(argv=None):
     print("permissions:")
     for p in permissions:
         print("  %s" % p)
+
+    print("native libraries (LOAD alignment):")
+    for name, abi, aligns in libs:
+        shown = " ".join("%#x" % a for a in sorted(set(aligns))) if aligns else "(not ELF)"
+        note = "" if abi in ALIGN_ENFORCED_ABIS else "  (32-bit, not checked)"
+        print("  %s %s%s" % (name, shown, note))
+    if not libs:
+        print("  (none)")
 
     print("mode: %s" % ("strict" if args.strict else "non-strict"))
     if problems:
