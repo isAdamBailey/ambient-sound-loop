@@ -216,6 +216,21 @@ def main():
         expect("64-bit library aligned to 4 KB fails", page4k, 1, "--non-strict",
                contains=["arm64-v8a/libhumspan.so", "0x1000"])
 
+        x86_4k = fx.bundle(libs={"arm64-v8a/libhumspan.so": elf64(0x4000),
+                                 "x86_64/libhumspan.so": elf64(0x1000)})
+        expect("x86_64 library aligned to 4 KB fails", x86_4k, 1, "--non-strict",
+               contains=["x86_64/libhumspan.so"])
+        page64k = fx.bundle(libs={"arm64-v8a/libhumspan.so": elf64(0x10000),
+                                  "x86_64/libhumspan.so": elf64(0x10000)})
+        expect("64 KB alignment passes", page64k, 0, "--non-strict")
+        legacy32 = fx.bundle(libs={"arm64-v8a/libhumspan.so": elf64(0x4000),
+                                   "armeabi-v7a/libhumspan.so": elf32(0x1000)})
+        expect("32-bit library aligned to 4 KB is reported, not failed", legacy32, 0,
+               "--non-strict", contains=["armeabi-v7a/libhumspan.so 0x1000"])
+        not_elf = fx.bundle(libs={"arm64-v8a/libhumspan.so": b"not an ELF file"})
+        expect("unreadable 64-bit library fails", not_elf, 1, "--non-strict",
+               contains=["not an ELF"])
+
         unsigned = fx.bundle(signed=False)
         expect("unsigned bundle fails", unsigned, 1, "--non-strict", contains=["unsigned"])
     finally:
