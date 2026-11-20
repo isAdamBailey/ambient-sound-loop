@@ -33,7 +33,7 @@ GOOD_PERMISSIONS = [
     "android.permission.POST_NOTIFICATIONS",
     "android.permission.WAKE_LOCK",
     "android.permission.ACCESS_NETWORK_STATE",
-    "dev.humspan.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+    "io.adambailey.humspan.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
 ]
 
 failures = []
@@ -99,7 +99,8 @@ class Fixtures:
             self.keystores[key] = path
         return self.keystores[key]
 
-    def bundle(self, version_code=2, version_name="1.0.0", target_sdk=crb.MIN_TARGET_SDK,
+    def bundle(self, package="io.adambailey.humspan", version_code=2, version_name="1.0.0",
+               target_sdk=crb.MIN_TARGET_SDK,
                permissions=GOOD_PERMISSIONS, sdk23_permissions=(), libs=None,
                signer="CN=Humspan Upload", validity_days=10000, signed=True,
                modules=None, corrupt_libs=False):
@@ -117,9 +118,10 @@ class Fixtures:
                         for p in sdk23_permissions)
         proto = self.proto_manifest(work, "base",
             '<uses-sdk android:minSdkVersion="24" android:targetSdkVersion="%d"/>'
-            '<permission android:name="dev.humspan.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"'
-            ' android:protectionLevel="signature"/>%s' % (target_sdk, uses),
-            ' android:versionCode="%d" android:versionName="%s"' % (version_code, version_name))
+            '<permission android:name="%s.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"'
+            ' android:protectionLevel="signature"/>%s' % (target_sdk, package, uses),
+            ' android:versionCode="%d" android:versionName="%s"' % (version_code, version_name),
+            package)
         aab = os.path.join(self.dir, "fixture%d.aab" % self.count)
         with zipfile.ZipFile(proto) as src, zipfile.ZipFile(aab, "w") as out:
             out.writestr("BundleConfig.pb", b"")
@@ -133,7 +135,7 @@ class Fixtures:
                 # With no uses-sdk, aapt2 would report pre-API-4 implied permissions.
                 feature = self.proto_manifest(
                     work, module, '<uses-sdk android:minSdkVersion="24"/>' + uses,
-                    ' split="%s"' % module)
+                    ' split="%s"' % module, package)
                 with zipfile.ZipFile(feature) as fsrc:
                     out.writestr(module + "/manifest/AndroidManifest.xml",
                                  fsrc.read("AndroidManifest.xml"))
@@ -153,12 +155,12 @@ class Fixtures:
                 f.write(raw)
         return aab
 
-    def proto_manifest(self, work, module, body, attrs=""):
+    def proto_manifest(self, work, module, body, attrs, package):
         """Links a manifest to protobuf format; returns the proto zip's path."""
         manifest = os.path.join(work, module + "-AndroidManifest.xml")
         with open(manifest, "w") as f:
             f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android"'
-                    ' package="dev.humspan.app"%s>%s<application/></manifest>' % (attrs, body))
+                    ' package="%s"%s>%s<application/></manifest>' % (package, attrs, body))
         proto = os.path.join(work, module + "-proto.zip")
         subprocess.run(
             [self.aapt2, "link", "--proto-format", "-o", proto, "--manifest", manifest,
@@ -214,7 +216,8 @@ def main():
         good = fx.bundle(version_code=5, version_name="1.2.3")
 
         expect("good bundle passes in strict mode", good, 0,
-               contains=["versionName: 1.2.3", "versionCode: 5",
+               contains=["package: io.adambailey.humspan", "versionName: 1.2.3",
+                         "versionCode: 5",
                          "CN=Humspan Upload", "android.permission.WAKE_LOCK"])
         expect("good bundle passes in non-strict mode", good, 0, "--non-strict")
 
@@ -246,6 +249,10 @@ def main():
         expect("INTERNET via uses-permission-sdk-23 fails", internet23, 1, "--non-strict")
         fewer = fx.bundle(permissions=GOOD_PERMISSIONS[:2])
         expect("a subset of the allowlist passes", fewer, 0, "--non-strict")
+
+        wrong_package = fx.bundle(package="dev.humspan.app")
+        expect("a package other than the Play app's fails", wrong_package, 1, "--non-strict",
+               contains=["package dev.humspan.app is not the Play app's io.adambailey.humspan"])
 
         old_target = fx.bundle(target_sdk=crb.MIN_TARGET_SDK - 1)
         expect("targetSdk below the minimum fails", old_target, 1, "--non-strict",
@@ -284,7 +291,7 @@ def main():
         expect("failing keytool cannot run", good, 2, "--non-strict",
                env={"JAVA_HOME": fx.java_home_with_failing_keytool()},
                contains=["error:", "keytool"])
-        unquoted = fx.script("aapt2-unquoted", "echo \"package: name='dev.humspan.app\"")
+        unquoted = fx.script("aapt2-unquoted", "echo \"package: name='io.adambailey.humspan\"")
         expect("unterminated quote in aapt2 output cannot run", good, 2, "--non-strict",
                "--aapt2", unquoted, contains=["error:"])
         not_executable = fx.script("aapt2-not-executable", "exit 0", executable=False)

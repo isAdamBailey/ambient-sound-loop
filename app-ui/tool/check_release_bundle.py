@@ -26,6 +26,9 @@ import sys
 import tempfile
 import zipfile
 
+# The applicationId Play Console's app is locked to.
+PACKAGE_NAME = "io.adambailey.humspan"
+
 # Play's minimum target API for new apps and updates (API 36 since 31 Aug 2026).
 # Raise it when Play raises its rule; check Play Console on the day.
 MIN_TARGET_SDK = 36
@@ -39,7 +42,8 @@ ALLOWED_PERMISSIONS = frozenset([
     "android.permission.POST_NOTIFICATIONS",
     "android.permission.WAKE_LOCK",
     "android.permission.ACCESS_NETWORK_STATE",
-    "dev.humspan.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+    # AndroidX declares this signature permission under the app's own package.
+    f"{PACKAGE_NAME}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
 ])
 
 # Never allowed: the "no data collected or shared" Data safety answer depends on it.
@@ -277,6 +281,12 @@ def check_signer(signer, verified, strict):
     return []
 
 
+def check_package(package):
+    if package != PACKAGE_NAME:
+        return ["package %s is not the Play app's %s; set applicationId" % (package, PACKAGE_NAME)]
+    return []
+
+
 def check_version_code(version_code, last):
     if version_code is None or not version_code.isdigit():
         return ["no numeric versionCode in the manifest (%s)" % version_code]
@@ -368,6 +378,7 @@ def _check(args):
 
     problems = []
     problems += check_signer(signer, verified, args.strict)
+    problems += check_package(facts.get("name"))
     problems += check_version_code(facts.get("versionCode"), args.last_version_code)
     problems += check_target_sdk(facts.get("targetSdk"))
     problems += check_permissions(permissions)

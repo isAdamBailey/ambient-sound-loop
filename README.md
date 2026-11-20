@@ -95,7 +95,7 @@ keyPassword=…
 python3 app-ui/tool/check_release_bundle.py --last-version-code N app-ui/build/app/outputs/bundle/release/app-release.aab
 ```
 
-It prints versionName, versionCode, targetSdk, signer, permissions and each native library's `LOAD` alignment, then fails (exit 1) on the debug key, a key that expires before 2033-10-22, a versionCode not above the last upload, a targetSdk below Play's minimum, a permission (in any module's manifest) outside the allowlist or `INTERNET`, or a 64-bit library aligned below 16 KB. Exit 2 means it could not run. It needs a JDK and the SDK build tools (`aapt2`). Strict is the default. `--non-strict` accepts any verified non-debug key, such as CI's short-lived throwaway key. After changing it, run `python3 app-ui/tool/test_check_release_bundle.py`.
+It prints versionName, versionCode, targetSdk, signer, permissions and each native library's `LOAD` alignment, then fails (exit 1) on a package other than `io.adambailey.humspan`, the debug key, a key that expires before 2033-10-22, a versionCode not above the last upload, a targetSdk below Play's minimum, a permission (in any module's manifest) outside the allowlist or `INTERNET`, or a 64-bit library aligned below 16 KB. Exit 2 means it could not run. It needs a JDK and the SDK build tools (`aapt2`). Strict is the default. `--non-strict` accepts any verified non-debug key, such as CI's short-lived throwaway key. After changing it, run `python3 app-ui/tool/test_check_release_bundle.py`.
 
 ## Listen
 
