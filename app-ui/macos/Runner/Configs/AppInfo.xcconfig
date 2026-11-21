@@ -8,7 +8,7 @@
 PRODUCT_NAME = Humspan
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = dev.humspan.app
+PRODUCT_BUNDLE_IDENTIFIER = io.adambailey.humspan
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 dev.humspan. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Adam Bailey. All rights reserved.
