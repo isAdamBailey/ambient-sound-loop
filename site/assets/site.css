@@ -136,39 +136,25 @@ a:hover { text-decoration-color: var(--ink); }
 .stores {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 16px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.store {
+/* The official badges, unaltered (Apple and Google badge guidelines). A store
+   that is not live yet shows its badge without a link, with a note under it. */
+.badge {
   display: inline-flex;
   flex-direction: column;
-  justify-content: center;
-  min-width: 168px;
-  min-height: 56px;
-  padding: 8px 22px;
-  border-radius: 28px;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.2;
+  align-items: center;
+  gap: 6px;
+  border-radius: 9px;
   text-decoration: none;
 }
-.store small {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-/* A live link: the page's one solid shape, like the app's Play circle. */
-a.store { background: var(--ink); color: var(--ground); }
-a.store small { color: #3a3628; }
-a.store:hover { background: var(--ink-hover); }
-/* Not yet released: an outline, not a link. */
-.store.is-soon {
-  border: 1.5px solid var(--dim);
-  color: var(--ink);
-}
-.store.is-soon small { color: var(--dim); }
+.badge img { display: block; height: 52px; width: auto; }
+.badge small { font-size: 12px; font-weight: 500; letter-spacing: 0.02em; color: var(--dim); }
+a.badge:hover img { filter: brightness(1.15); }
 
 /* ---------- Home: hero ---------- */
 
