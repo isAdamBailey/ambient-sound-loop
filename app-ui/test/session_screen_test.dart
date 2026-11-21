@@ -69,6 +69,41 @@ void main() {
       expect(centerOf(tester, '8:00:00').dx, closeTo(449.5, 1));
     });
 
+    testWidgets('a portrait tablet stacks, with a larger dial, centred and on screen', (tester) async {
+      for (final size in const [Size(1032, 1376), Size(834, 1194), Size(820, 1180)]) {
+        await pumpScreen(tester, size);
+        expect(tester.takeException(), isNull, reason: '$size');
+        final dial = centerOf(tester, '8:00:00');
+        expect(dial.dy, lessThan(centerOf(tester, 'NOISE').dy), reason: '$size stacks');
+        expect(dial.dx, closeTo(size.width / 2, 1), reason: '$size');
+        expect(tester.getSize(find.byType(SessionDial)).width, greaterThan(300), reason: '$size dial grows');
+        final noise = tester.getRect(find.text('NOISE'));
+        expect(noise.left, greaterThan((size.width - stackedMaxWidth) / 2 - 1), reason: '$size column width');
+        final top = tester.getTopLeft(find.byType(SessionDial)).dy;
+        final bottom = size.height - tester.getRect(playButtonFinder()).bottom;
+        expect(bottom, greaterThan(0), reason: '$size Play on screen');
+        expect((top - bottom).abs(), lessThan(48), reason: '$size column is centred, top $top bottom $bottom');
+      }
+    });
+
+    testWidgets('a landscape tablet puts the dial beside the layers, larger', (tester) async {
+      for (final size in const [Size(1376, 1032), Size(1194, 834)]) {
+        await pumpScreen(tester, size);
+        expect(tester.takeException(), isNull, reason: '$size');
+        expect(centerOf(tester, '8:00:00').dx, lessThan(centerOf(tester, 'NOISE').dx), reason: '$size');
+        expect(tester.getSize(find.byType(SessionDial)).width, greaterThan(300), reason: '$size dial grows');
+        expect(tester.getRect(playButtonFinder()).bottom, lessThanOrEqualTo(size.height), reason: '$size');
+      }
+    });
+
+    testWidgets('iPad multitasking widths fit and keep Play reachable', (tester) async {
+      for (final size in const [Size(320, 1376), Size(375, 1376), Size(507, 1376), Size(678, 1032), Size(320, 1032)]) {
+        await pumpScreen(tester, size);
+        expect(tester.takeException(), isNull, reason: '$size');
+        expect(tester.getRect(playButtonFinder()).bottom, lessThanOrEqualTo(size.height), reason: '$size');
+      }
+    });
+
     testWidgets('the minimum desktop window and a landscape phone do not overflow', (tester) async {
       await pumpScreen(tester, const Size(360, 640));
       expect(tester.takeException(), isNull);

@@ -56,7 +56,8 @@ white,pink,brown,colored,ambient,generator,timer,offline,tone,hum,drone,stereo,m
 
 | Set | Simulator | Size | Files |
 | --- | --- | --- | --- |
-| iPhone 6.9" | iPhone 18 Pro Max | 1320×2868 | `iphone-1-stopped.png` … `iphone-4-exact.png` |
+| iPhone with Dynamic Island (large) | iPhone 18 Pro Max | 1320×2868 | `iphone-1-stopped.png` … `iphone-4-exact.png` |
+| iPhone with Dynamic Island (medium) | iPhone 18 Pro | 1206×2622 | `iphone-medium-1-stopped.png` … `iphone-medium-4-exact.png` |
 | iPad 13" | iPad Pro 13-inch (M5) | 2064×2752 | `ipad-1-stopped.png` … `ipad-4-exact.png` |
 
 Order: (1) stopped, layers mixed, 8h; (2) playing; (3) Until I stop; (4) Exact
@@ -73,6 +74,9 @@ SHOTS_DEVICE=$U SHOTS_DIR=$PWD/../docs/store/app-store SHOTS_PREFIX=iphone \
   --driver=test_driver/store_screenshots_test.dart
 ```
 
-For the iPad set use `SHOTS_PREFIX=ipad SHOTS_WIDE=1` (the wide layout's exact
-entry is typed fields, not the keypad). The Simulator runs a debug build; the
+Use `SHOTS_PREFIX=iphone-medium` on the iPhone 18 Pro and `SHOTS_PREFIX=ipad`
+on the iPad Pro 13-inch (portrait stacks like a phone, so it uses the keypad).
+`SHOTS_WIDE=1` is only for a landscape set, where exact entry is typed fields.
+Apple rejects screenshots with an alpha channel, so flatten each one:
+`magick <file> -alpha off <file>`. The Simulator runs a debug build; the
 screen is the same as release.

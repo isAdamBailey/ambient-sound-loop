@@ -1,8 +1,10 @@
 /// The session screen: the whole app. Spec #9 §2, §3 and §8.
 ///
 /// The dial carries the clock and the length; under it the preset stops,
-/// then one ruled row per layer and the Mono row, then Play. Narrow screens stack them; at
-/// 900 px and up the dial sits left of the layers.
+/// then one ruled row per layer and the Mono row, then Play. Narrow and portrait
+/// screens stack them; landscape screens 900 px and wider put the dial left of
+/// the layers. Large screens grow the dial rather than leave it small in a
+/// field of black.
 library;
 
 import 'dart:math' as math;
@@ -19,8 +21,16 @@ import 'privacy.dart';
 import 'session_dial.dart';
 import 'theme.dart';
 
-/// Windows or screens this wide and up put the dial beside the layers.
+/// Landscape windows or screens this wide and up put the dial beside the layers.
 const wideBreakpoint = 900.0;
+
+/// The stacked layout never runs wider than this, so a portrait tablet keeps
+/// the phone's proportions instead of stretching every row.
+const stackedMaxWidth = 600.0;
+
+/// Whether [size] gets the side-by-side layout. A portrait tablet is wider than
+/// [wideBreakpoint] but stacks, because its height is where the room is.
+bool isWideLayout(Size size) => size.width >= wideBreakpoint && size.width >= size.height;
 
 class SessionScreen extends StatelessWidget {
   const SessionScreen({super.key, required this.controller, this.onPrivacy = openPrivacyPolicy});
@@ -32,7 +42,7 @@ class SessionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= wideBreakpoint;
+    final wide = isWideLayout(MediaQuery.sizeOf(context));
     return Scaffold(
       backgroundColor: SessionColors.ground,
       body: SafeArea(
@@ -59,32 +69,39 @@ class _NarrowLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const pad = EdgeInsets.fromLTRB(20, 12, 20, 20);
+    // Everything but the dial takes about this much height.
+    const rows = 636.0;
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The dial takes what the rows leave, so a phone fits without scrolling.
-        final dial = math.max(
-          0.0,
-          math.min((constraints.maxHeight - 636).clamp(176.0, 260.0), constraints.maxWidth - pad.horizontal),
-        );
-        return SingleChildScrollView(
-          padding: pad,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight - pad.vertical),
-            child: IntrinsicHeight(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: SessionDial(controller: c, size: dial, onExact: () => _openExact(context, c, wide: false)),
-                  ),
-                  const SizedBox(height: 4),
-                  _StopsOrStatus(c),
-                  const SizedBox(height: 10),
-                  ..._layers(c),
-                  _MonoRow(c),
-                  const Expanded(child: SizedBox(height: 16)),
-                  _PlayRow(c, onPrivacy),
-                ],
+        final width = math.min(constraints.maxWidth, stackedMaxWidth + pad.horizontal) - pad.horizontal;
+        final height = constraints.maxHeight - pad.vertical;
+        // The dial takes what the rows leave, so a phone fits without scrolling
+        // and a tablet's spare height goes into a larger dial.
+        final dial = math.max(0.0, math.min((height - rows).clamp(176.0, 400.0), width));
+        // On a tall screen the column keeps its natural height and is centred,
+        // rather than pushing Play to the bottom edge.
+        final columnHeight = math.min(height, dial + rows + 48);
+        return Center(
+          child: SingleChildScrollView(
+            padding: pad,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: columnHeight, maxWidth: width),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: SessionDial(controller: c, size: dial, onExact: () => _openExact(context, c, wide: false)),
+                    ),
+                    const SizedBox(height: 4),
+                    _StopsOrStatus(c),
+                    const SizedBox(height: 10),
+                    ..._layers(c),
+                    _MonoRow(c),
+                    const Expanded(child: SizedBox(height: 16)),
+                    _PlayRow(c, onPrivacy),
+                  ],
+                ),
               ),
             ),
           ),
@@ -100,41 +117,46 @@ class _WideLayout extends StatelessWidget {
   final VoidCallback onPrivacy;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.all(32),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 940),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 340,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: SessionDial(controller: c, size: 300, onExact: () => _openExact(context, c, wide: true)),
-                  ),
-                  const SizedBox(height: 8),
-                  _StopsOrStatus(c),
-                ],
+  Widget build(BuildContext context) {
+    // A taller window (a landscape tablet) gets a larger dial; a laptop-sized
+    // one keeps 300.
+    final dial = (MediaQuery.sizeOf(context).height * 0.42).clamp(300.0, 420.0);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 940 + (dial - 300) * 1.5),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: dial + 40,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: SessionDial(controller: c, size: dial, onExact: () => _openExact(context, c, wide: true)),
+                    ),
+                    const SizedBox(height: 8),
+                    _StopsOrStatus(c),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 64),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [..._layers(c), _MonoRow(c), const SizedBox(height: 28), _PlayRow(c, onPrivacy)],
+              const SizedBox(width: 64),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [..._layers(c), _MonoRow(c), const SizedBox(height: 28), _PlayRow(c, onPrivacy)],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 List<Widget> _layers(SessionController c) {
