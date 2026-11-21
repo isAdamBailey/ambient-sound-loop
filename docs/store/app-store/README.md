@@ -59,6 +59,7 @@ white,pink,brown,colored,ambient,generator,timer,offline,tone,hum,drone,stereo,m
 | iPhone with Dynamic Island (large) | iPhone 18 Pro Max | 1320×2868 | `iphone-1-stopped.png` … `iphone-4-exact.png` |
 | iPhone with Dynamic Island (medium) | iPhone 18 Pro | 1206×2622 | `iphone-medium-1-stopped.png` … `iphone-medium-4-exact.png` |
 | iPad 13" | iPad Pro 13-inch (M5) | 2064×2752 | `ipad-1-stopped.png` … `ipad-4-exact.png` |
+| Mac | release build, window zoomed | 2560×1600 | `mac-1-stopped.png` … `mac-4-exact.png` |
 
 Order: (1) stopped, layers mixed, 8h; (2) playing; (3) Until I stop; (4) Exact
 entry. The real app, driven by `app-ui/test_driver/store_screenshots*.dart`,
@@ -80,3 +81,11 @@ on the iPad Pro 13-inch (portrait stacks like a phone, so it uses the keypad).
 Apple rejects screenshots with an alpha channel, so flatten each one:
 `magick <file> -alpha off <file>`. The Simulator runs a debug build; the
 screen is the same as release.
+
+**Mac set (by hand).** Flutter Driver taps stall on macOS when the window is
+not frontmost, so the Mac shots are manual. Open the release build, zoom the
+window, and for each state press ⇧⌘4, Space, then Option-click the window (no
+shadow). Then crop to the opaque window (`magick f -alpha extract -threshold
+99% -format '%@' info:`), cut the 80 px title bar, and fit to 2560×1600 with
+`-resize 2560x1600 -background <edge color> -gravity center -extent 2560x1600`.
+macOS screenshot names contain U+202F before "PM"; glob them, don't type them.
